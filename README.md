@@ -85,6 +85,36 @@ pip install -r requirements.txt
 (De core-package gebruikt alleen `opencv-python` en `numpy`; ADB wordt via
 `subprocess` aangeroepen.)
 
+### ⚠️ Windows-valkuil: welke Python?
+
+De nieuwe **MSIX-gebaseerde python.org install** (en de Microsoft Store-Python)
+draait in een **sandbox die `%LOCALAPPDATA%` virtualiseert**. Omdat de Android SDK
+standaard in `%LOCALAPPDATA%\Android\Sdk` staat, ziet zo'n Python de `adb.exe`
+niet — je krijgt dan "ADB not found" terwijl `adb devices` in PowerShell prima werkt.
+
+Herken je dit? Test:
+
+```powershell
+python -c "import os; print('Android' in os.listdir(os.environ['LOCALAPPDATA']))"
+```
+
+Print dit `False` terwijl de map bestaat, dan zit je in de sandbox. Twee oplossingen:
+
+1. **Roep Python via het volledige pad aan** (draait dan zonder sandbox), bijv.:
+   ```powershell
+   & "$env:LOCALAPPDATA\Python\pythoncore-3.14-64\python.exe" scripts\check_device.py
+   ```
+2. **Of** wijs adb expliciet aan, dan maakt de Python-variant niet uit:
+   ```powershell
+   $env:PHONEBOT_ADB_PATH = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+   ```
+
+### ADB vinden
+
+Je hoeft `adb` niet per se op je PATH te zetten: de bot zoekt automatisch naar
+`adb` op PATH en in de gebruikelijke SDK-locaties. Lukt dat niet, zet dan
+`PHONEBOT_ADB_PATH` (zie hierboven) of voeg platform-tools toe aan je PATH.
+
 ## 5. Screenshot test draaien
 
 Eerst devices controleren:

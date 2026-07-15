@@ -43,7 +43,7 @@ def run_adb(
         AdbError: If adb is not installed, times out, or returns a non-zero exit code.
     """
     resolved = serial or config.default_serial()
-    cmd = ["adb"]
+    cmd = [config.adb_executable()]
     if resolved:
         cmd += ["-s", resolved]
     cmd += args
@@ -57,7 +57,8 @@ def run_adb(
         )
     except FileNotFoundError as exc:
         raise AdbError(
-            "ADB not found. Install Android platform-tools and make sure 'adb' is on your PATH."
+            "ADB not found. Install Android platform-tools and put 'adb' on your PATH, "
+            f"or set {config.ENV_ADB_PATH} to the full path of adb.exe."
         ) from exc
     except subprocess.TimeoutExpired as exc:
         raise AdbError(f"ADB command timed out after {timeout}s: {' '.join(cmd)}") from exc
