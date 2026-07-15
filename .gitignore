@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# PhoneBot outputs (keep the folder, ignore captured images)
+outputs/*
+!outputs/.gitkeep
