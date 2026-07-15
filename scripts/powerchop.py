@@ -1,8 +1,11 @@
 """Slimmere woodcutting-loop: chop -> bij volle inventory de logs droppen -> door.
 
-Puur vision-based, met twee templates:
-  --tree : een stukje van de boom om op te tikken (choppen)
-  --log  : een enkel log-icoon uit je inventory (om te tellen + te droppen)
+Boom aantikken kan op twee manieren (kies er een):
+  --tree TREE.png : template van de boom (werkt matig omdat boomkronen wuiven)
+  --tree-xy X,Y   : vaste tik-coordinaat -- ROBUUST bij wuivende bomen. Sta stil
+                    pal naast de boom; de bot tikt telkens exact dat punt.
+En altijd:
+  --log LOG.png   : een enkel log-icoon uit je inventory (om te tellen + te droppen)
 
 Vereist dat 'tap to drop' AAN staat in de game (Settings), zodat een log droppen
 gewoon een tik op de log is. Staat het uit, zet het aan -- of we gaan terug naar
@@ -43,7 +46,10 @@ from phonebot import adb, config, input as bot_input, screenshot, vision  # noqa
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Power-chop: chop en drop bij volle inventory.")
-    p.add_argument("--tree", required=True, help="Template van de boom (om te choppen)")
+    p.add_argument("--tree", help="Template van de boom (om te choppen)")
+    p.add_argument("--tree-xy", metavar="X,Y",
+                   help="Vaste tik-coordinaat i.p.v. template, bv. 1560,615 "
+                        "(robuust bij wuivende bomen; sta wel stil naast de boom)")
     p.add_argument("--log", required=True, help="Template van een enkel log-icoon in de inventory")
     p.add_argument("--threshold", type=float, default=config.DEFAULT_MATCH_THRESHOLD,
                    help=f"Match-drempel 0.0-1.0 (default {config.DEFAULT_MATCH_THRESHOLD})")
@@ -100,8 +106,21 @@ def main() -> int:
         print("ERROR: --min-wait mag niet groter zijn dan --max-wait.", file=sys.stderr)
         return 1
 
+    if bool(args.tree) == bool(args.tree_xy):
+        print("ERROR: geef precies EEN van --tree of --tree-xy op.", file=sys.stderr)
+        return 1
+
+    tree_xy: tuple[int, int] | None = None
+    if args.tree_xy:
+        try:
+            xs, ys = args.tree_xy.split(",")
+            tree_xy = (int(xs), int(ys))
+        except ValueError:
+            print("ERROR: --tree-xy moet 'x,y' zijn, bv. 1560,615", file=sys.stderr)
+            return 1
+
     try:
-        tree_tmpl = load_template(args.tree)
+        tree_tmpl = load_template(args.tree) if args.tree else None
         log_tmpl = load_template(args.log)
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -132,23 +151,30 @@ def main() -> int:
                 drop_inventory(log_tmpl, args.threshold, serial)
                 continue
 
-            # 2) alle bomen zoeken en er willekeurig een choppen (rotatie + minder robot-achtig).
-            trees = vision.find_all_templates(screen, tree_tmpl, threshold=args.threshold, max_results=20)
-            if not trees:
-                misses += 1
-                print(f"  geen boom ({misses}/{args.max_misses})...")
-                if misses >= args.max_misses:
-                    print("Gestopt: te vaak geen boom gevonden.")
-                    return 2
-                time.sleep(random.uniform(1.0, 2.0))
-                continue
+            # 2) boom choppen: vaste coordinaat (robuust) of via template.
+            if tree_xy is not None:
+                cycles += 1
+                print(f"  [{cycles}] tik boom op {tree_xy} (logs nu: {len(logs)})")
+                bot_input.tap(*tree_xy, serial=serial)
+            else:
+                trees = vision.find_all_templates(
+                    screen, tree_tmpl, threshold=args.threshold, max_results=20
+                )
+                if not trees:
+                    misses += 1
+                    print(f"  geen boom ({misses}/{args.max_misses})...")
+                    if misses >= args.max_misses:
+                        print("Gestopt: te vaak geen boom gevonden.")
+                        return 2
+                    time.sleep(random.uniform(1.0, 2.0))
+                    continue
 
-            misses = 0
-            cycles += 1
-            tree = random.choice(trees)
-            print(f"  [{cycles}] {len(trees)} bomen gevonden -> chop conf {tree.confidence:.3f} "
-                  f"(logs nu: {len(logs)})")
-            bot_input.tap(*tree.center, serial=serial)
+                misses = 0
+                cycles += 1
+                tree = random.choice(trees)
+                print(f"  [{cycles}] {len(trees)} bomen gevonden -> chop conf {tree.confidence:.3f} "
+                      f"(logs nu: {len(logs)})")
+                bot_input.tap(*tree.center, serial=serial)
 
             if args.max_cycles and cycles >= args.max_cycles:
                 print(f"Klaar: {cycles} cycli (--max-cycles bereikt).")
