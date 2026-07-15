@@ -34,3 +34,11 @@ def swipe(
         ],
         serial=device,
     )
+
+
+def long_press(x: int, y: int, duration_ms: int = 600, serial: str | None = None) -> None:
+    """Press and hold at (x, y) for `duration_ms` ms (a zero-length swipe).
+
+    On mobile this opens the context/hold menu (e.g. to pick 'Drop' on an item).
+    """
+    swipe(x, y, x, y, duration_ms=duration_ms, serial=serial)
