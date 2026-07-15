@@ -96,12 +96,14 @@ def main() -> int:
         while True:
             try:
                 screen = grab_screen(serial)
-                match = vision.find_template(screen, template, threshold=args.threshold)
+                matches = vision.find_all_templates(
+                    screen, template, threshold=args.threshold, max_results=20
+                )
             except (adb.AdbError, ValueError) as exc:
                 print(f"ERROR bij screenshot/match: {exc}", file=sys.stderr)
                 return 1
 
-            if match is None:
+            if not matches:
                 misses += 1
                 print(f"  geen match ({misses}/{args.max_misses}) -- opnieuw proberen...")
                 if misses >= args.max_misses:
@@ -112,9 +114,11 @@ def main() -> int:
                 continue
 
             misses = 0
+            match = random.choice(matches)  # willekeurige uit alle treffers -> rotatie
             x, y = jittered_point(match)
             actions += 1
-            print(f"  [{actions}] match conf {match.confidence:.3f} -> tap ({x}, {y})")
+            print(f"  [{actions}] {len(matches)} treffers -> tap conf {match.confidence:.3f} "
+                  f"op ({x}, {y})")
             try:
                 bot_input.tap(x, y, serial=serial)
             except adb.AdbError as exc:

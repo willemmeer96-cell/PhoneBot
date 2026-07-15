@@ -132,9 +132,9 @@ def main() -> int:
                 drop_inventory(log_tmpl, args.threshold, serial)
                 continue
 
-            # 2) boom zoeken en choppen.
-            tree = vision.find_template(screen, tree_tmpl, threshold=args.threshold)
-            if tree is None:
+            # 2) alle bomen zoeken en er willekeurig een choppen (rotatie + minder robot-achtig).
+            trees = vision.find_all_templates(screen, tree_tmpl, threshold=args.threshold, max_results=20)
+            if not trees:
                 misses += 1
                 print(f"  geen boom ({misses}/{args.max_misses})...")
                 if misses >= args.max_misses:
@@ -145,7 +145,8 @@ def main() -> int:
 
             misses = 0
             cycles += 1
-            print(f"  [{cycles}] chop boom conf {tree.confidence:.3f} "
+            tree = random.choice(trees)
+            print(f"  [{cycles}] {len(trees)} bomen gevonden -> chop conf {tree.confidence:.3f} "
                   f"(logs nu: {len(logs)})")
             bot_input.tap(*tree.center, serial=serial)
 
