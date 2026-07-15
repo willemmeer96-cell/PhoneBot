@@ -166,6 +166,27 @@ Dit is **vision-based**. Dat betekent:
   exacte match-punt met genormaliseerde kruiscorrelatie (`TM_CCOEFF_NORMED`).
 - Coördinaten zijn pixels op het toestel; taps landen op het **midden** van de match.
 
+## Eerste bot: een simpele loop (woodcutting-stijl)
+
+`scripts/woodcutting.py` is het minimale "eerste bot"-patroon: **zoek template → tap →
+wacht → herhaal**. Hetzelfde script werkt voor fishing/mining/etc. — verwissel alleen de
+template. Het heeft ingebouwde randomisatie (variabele wachttijd + kleine tap-jitter) en
+nette stop-condities.
+
+```powershell
+# knip eerst een boom/vis/rots uit een game-screenshot -> templates/tree.png
+python scripts/woodcutting.py templates/tree.png
+python scripts/woodcutting.py templates/tree.png --threshold 0.8 --min-wait 4 --max-wait 7
+python scripts/woodcutting.py templates/tree.png --max-actions 50
+```
+
+Stoppen met **Ctrl+C**. Stopt ook automatisch na te veel misses (`--max-misses`, default 5).
+
+Exit codes: `0` = normaal gestopt/klaar, `1` = fout, `2` = te vaak niets gevonden.
+
+> Let op: dit automatiseert een live game-account, wat tegen de voorwaarden van veel games
+> ingaat en tot een ban kan leiden. Gebruik het voor experimenteren op een wegwerp-account.
+
 ## Snelle API
 
 ```python
