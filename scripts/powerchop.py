@@ -1,15 +1,18 @@
 """Slimmere woodcutting-loop: chop -> bij volle inventory de logs droppen -> door.
 
-Puur vision-based, met drie templates:
-  --tree  : een stukje van de boom om op te tikken (choppen)
-  --log   : een enkel log-icoon uit je inventory (om te tellen + te droppen)
-  --drop  : de "Drop"-knop uit het long-press-menu (verschijnt na ingedrukt houden)
+Puur vision-based, met twee templates:
+  --tree : een stukje van de boom om op te tikken (choppen)
+  --log  : een enkel log-icoon uit je inventory (om te tellen + te droppen)
+
+Vereist dat 'tap to drop' AAN staat in de game (Settings), zodat een log droppen
+gewoon een tik op de log is. Staat het uit, zet het aan -- of we gaan terug naar
+het long-press-menu (input.long_press bestaat daarvoor nog).
 
 Werking per cyclus:
-  1. zoek de boom en tik erop; wacht terwijl je chopt
-  2. tel de logs in je inventory (via de log-template)
-  3. is de inventory vol (>= --full logs)? dan drop-fase:
-     voor elke log: long-press -> zoek de Drop-knop -> tik 'm -> herhaal tot leeg
+  1. tel de logs in je inventory (via de log-template)
+  2. is de inventory vol (>= --full logs)? dan drop-fase: tik elke gevonden log weg,
+     opnieuw scannen tot leeg
+  3. anders: zoek de boom en tik erop; wacht terwijl je chopt
 
 Let op:
 - Houd resolutie en orientatie stabiel; knip templates in exact die staat.
@@ -17,8 +20,8 @@ Let op:
   ban leiden. Gebruik dit op een wegwerp-account.
 
 Gebruik (Python via volledig pad i.v.m. Windows-sandbox):
-    python scripts/powerchop.py --tree templates/tree.png --log templates/log.png --drop templates/drop.png
-    python scripts/powerchop.py --tree ... --log ... --drop ... --full 27 --min-wait 3 --max-wait 6
+    python scripts/powerchop.py --tree templates/tree.png --log templates/log.png
+    python scripts/powerchop.py --tree ... --log ... --full 27 --min-wait 3 --max-wait 6
 
 Stoppen: Ctrl+C.
 """
@@ -42,7 +45,6 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Power-chop: chop en drop bij volle inventory.")
     p.add_argument("--tree", required=True, help="Template van de boom (om te choppen)")
     p.add_argument("--log", required=True, help="Template van een enkel log-icoon in de inventory")
-    p.add_argument("--drop", required=True, help="Template van de 'Drop'-knop (long-press-menu)")
     p.add_argument("--threshold", type=float, default=config.DEFAULT_MATCH_THRESHOLD,
                    help=f"Match-drempel 0.0-1.0 (default {config.DEFAULT_MATCH_THRESHOLD})")
     p.add_argument("--full", type=int, default=27,
@@ -70,8 +72,12 @@ def grab(serial: str | None):
     return screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
 
 
-def drop_inventory(log_tmpl, drop_tmpl, threshold: float, serial: str | None) -> int:
-    """Drop logs zolang ze gevonden worden. Geeft het aantal gedropte logs terug."""
+def drop_inventory(log_tmpl, threshold: float, serial: str | None) -> int:
+    """Tik elke gevonden log weg (tap-to-drop). Geeft het aantal gedropte logs terug.
+
+    We scannen opnieuw na elke ronde omdat de inventory verandert; klaar zodra er
+    geen logs meer gevonden worden.
+    """
     dropped = 0
     # Ruime bovengrens zodat een vastlopende drop niet oneindig doorgaat.
     for _ in range(40):
@@ -79,18 +85,11 @@ def drop_inventory(log_tmpl, drop_tmpl, threshold: float, serial: str | None) ->
         logs = vision.find_all_templates(screen, log_tmpl, threshold=threshold, max_results=40)
         if not logs:
             break
-        target = logs[0]
-        bot_input.long_press(*target.center, serial=serial)
-        time.sleep(random.uniform(0.5, 0.9))  # menu laten verschijnen
-
-        menu = grab(serial)
-        drop_btn = vision.find_template(menu, drop_tmpl, threshold=threshold)
-        if drop_btn is None:
-            print("      Drop-knop niet gevonden -> stop drop-fase (check drop-template).")
-            break
-        bot_input.tap(*drop_btn.center, serial=serial)
-        dropped += 1
-        time.sleep(random.uniform(0.4, 0.8))
+        for log in logs:
+            bot_input.tap(*log.center, serial=serial)
+            dropped += 1
+            time.sleep(random.uniform(0.15, 0.35))  # klein tikje tussen drops
+        time.sleep(random.uniform(0.3, 0.6))  # scherm laten bijwerken, dan opnieuw scannen
     print(f"      {dropped} logs gedropt.")
     return dropped
 
@@ -104,7 +103,6 @@ def main() -> int:
     try:
         tree_tmpl = load_template(args.tree)
         log_tmpl = load_template(args.log)
-        drop_tmpl = load_template(args.drop)
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -131,7 +129,7 @@ def main() -> int:
             logs = vision.find_all_templates(screen, log_tmpl, threshold=args.threshold, max_results=40)
             if len(logs) >= args.full:
                 print(f"Inventory vol ({len(logs)} logs) -> droppen...")
-                drop_inventory(log_tmpl, drop_tmpl, args.threshold, serial)
+                drop_inventory(log_tmpl, args.threshold, serial)
                 continue
 
             # 2) boom zoeken en choppen.

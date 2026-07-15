@@ -194,6 +194,26 @@ Exit codes: `0` = normaal gestopt/klaar, `1` = fout, `2` = te vaak niets gevonde
 > Let op: dit automatiseert een live game-account, wat tegen de voorwaarden van veel games
 > ingaat en tot een ban kan leiden. Gebruik het voor experimenteren op een wegwerp-account.
 
+### Slimmere variant: power-chop (`scripts/powerchop.py`)
+
+Chopt tot je inventory vol is en **dropt** dan de logs (tap-to-drop), daarna weer door.
+Twee templates: de boom en één log-icoon uit je inventory. Vereist dat **'tap to drop'
+AAN staat** in de game-settings (dan is een log droppen simpelweg een tik erop).
+
+```powershell
+python scripts/powerchop.py --tree templates/tree.png --log templates/log.png
+python scripts/powerchop.py --tree templates/tree.png --log templates/log.png --full 27
+```
+
+Per cyclus: is de inventory vol (>= `--full` logs, default 27)? dan alle logs weg-tikken
+en opnieuw scannen tot leeg; anders de boom zoeken, tikken en wachten. Stoppen met Ctrl+C.
+
+Twee handige core-helpers die hierbij horen:
+- `vision.find_all_templates(screen, template, threshold, max_results)` → lijst van matches
+  (bv. tellen hoeveel logs er in de inventory zitten).
+- `input.long_press(x, y, duration_ms)` → ingedrukt houden voor het context-menu (nodig als
+  'tap to drop' uit staat en je via het long-press-menu wilt droppen).
+
 ## Snelle API
 
 ```python
