@@ -98,16 +98,23 @@ Herken je dit? Test:
 python -c "import os; print('Android' in os.listdir(os.environ['LOCALAPPDATA']))"
 ```
 
-Print dit `False` terwijl de map bestaat, dan zit je in de sandbox. Twee oplossingen:
+Print dit `False` terwijl de map bestaat, dan zit je in de sandbox. De **betrouwbaarste
+fix** werkt in elke shell: kopieer platform-tools naar een map **buiten** `AppData\Local`
+(die map is namelijk gevirtualiseerd) en wijs `PHONEBOT_ADB_PATH` daarheen — permanent:
 
-1. **Roep Python via het volledige pad aan** (draait dan zonder sandbox), bijv.:
-   ```powershell
-   & "$env:LOCALAPPDATA\Python\pythoncore-3.14-64\python.exe" scripts\check_device.py
-   ```
-2. **Of** wijs adb expliciet aan, dan maakt de Python-variant niet uit:
-   ```powershell
-   $env:PHONEBOT_ADB_PATH = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
-   ```
+```powershell
+# eenmalig: platform-tools naar buiten AppData\Local kopieren
+Copy-Item "$env:LOCALAPPDATA\Android\Sdk\platform-tools" "$env:USERPROFILE\Documents\phonebot-adb" -Recurse
+# permanent instellen (geldt vanaf een NIEUWE terminal)
+setx PHONEBOT_ADB_PATH "$env:USERPROFILE\Documents\phonebot-adb\adb.exe"
+```
+
+> Belangrijk: `PHONEBOT_ADB_PATH` naar de adb in `AppData\Local\Android` laten wijzen helpt
+> NIET in de sandbox — die locatie is juist onzichtbaar. Kopieer 'm er dus buiten.
+
+Alternatief zonder kopie: installeer een **schone, niet-MSIX Python** (klassieke
+python.org-installer of via winget naar Program Files). Dan is er geen sandbox en werkt de
+adb-autodetectie vanzelf.
 
 ### ADB vinden
 
