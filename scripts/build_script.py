@@ -75,6 +75,13 @@ class Builder:
         self.loop_var = tk.BooleanVar(value=True)
         tk.Checkbutton(side, text="Loop (herhaal sequentie)", variable=self.loop_var).pack(anchor="w", pady=(6, 4))
 
+        tk.Label(side, text="Sleep maakt:").pack(anchor="w")
+        self.drag_mode = tk.StringVar(value="tap_template")
+        tk.Radiobutton(side, text="tap_template (zoek + tik)",
+                       variable=self.drag_mode, value="tap_template").pack(anchor="w")
+        tk.Radiobutton(side, text="wait_template (wacht tot beeld + tik)",
+                       variable=self.drag_mode, value="wait_template").pack(anchor="w")
+
         for text, cmd in [
             ("Wacht toevoegen", self.add_wait),
             ("Omhoog", lambda: self.move(-1)),
@@ -115,10 +122,11 @@ class Builder:
                 x, y = step["x"] // SUB, step["y"] // SUB
                 self.canvas.create_oval(x - 9, y - 9, x + 9, y + 9, outline="#ff3b3b", width=2)
                 self.canvas.create_text(x, y, text=str(i), fill="#ff3b3b")
-            elif step["type"] == "tap_template" and step.get("box"):
+            elif step.get("box"):
                 x1, y1, x2, y2 = (v // SUB for v in step["box"])
-                self.canvas.create_rectangle(x1, y1, x2, y2, outline="#3bd1ff", width=2)
-                self.canvas.create_text(x1 + 10, y1 + 8, text=str(i), fill="#3bd1ff")
+                colour = "#ffd23b" if step["type"] == "wait_template" else "#3bd1ff"
+                self.canvas.create_rectangle(x1, y1, x2, y2, outline=colour, width=2)
+                self.canvas.create_text(x1 + 10, y1 + 8, text=str(i), fill=colour)
         self.refresh_list()
 
     def refresh_list(self) -> None:
@@ -135,6 +143,8 @@ class Builder:
             return f"wait {step['min']}..{step['max']}s"
         if t == "tap_template":
             return f"tap_template {Path(step['template']).name}"
+        if t == "wait_template":
+            return f"wait_template {Path(step['template']).name} (max {step.get('timeout', 10)}s)"
         return t
 
     # ---- muis ----
@@ -171,12 +181,16 @@ class Builder:
         TEMPLATES.mkdir(exist_ok=True)
         name = f"step_{int(time.time())}.png"
         cv2.imwrite(str(TEMPLATES / name), crop)
-        self.steps.append({
-            "type": "tap_template",
+        step = {
+            "type": self.drag_mode.get(),
             "template": f"templates/{name}",
             "threshold": 0.85,
             "box": [dx1, dy1, dx2, dy2],
-        })
+        }
+        if step["type"] == "wait_template":
+            step["timeout"] = 10.0
+            step["tap"] = True
+        self.steps.append(step)
 
     # ---- bediening ----
     def add_wait(self) -> None:

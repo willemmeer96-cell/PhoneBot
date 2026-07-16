@@ -239,6 +239,50 @@ Opties: `--threshold` (match-drempel), `--interval` (scan-tempo), `--cooldown`
 > bewegende wereld-objecten (bomen die wuiven/despawnen, met de camera meeschuiven). Voor
 > dat laatste lezen client-based bots zoals GnomeBot/Microbot de game intern uit.
 
+## Visuele script-builder (`scripts/build_script.py`)
+
+Bouw een stappen-script door op een emulator-screenshot te klikken (GnomeBot-stijl):
+
+```powershell
+python scripts/build_script.py
+```
+
+- **Klik** op het beeld → `tap` op dat punt.
+- **Sleep** een rechthoek → knipt een template en maakt (afhankelijk van de radio-keuze)
+  een `tap_template` of `wait_template` stap.
+- Knoppen: wacht toevoegen, volgorde wijzigen, verwijderen, screenshot verversen,
+  loop aan/uit, opslaan als `.json`, en direct draaien.
+
+Het script draai je (opnieuw) met de runner:
+
+```powershell
+python scripts/run_script.py mijnscript.json --max-loops 20
+```
+
+### Stap-types & condities
+
+| Type | Doet |
+|------|------|
+| `tap` | tik op een vast punt (x, y) |
+| `wait` | wacht random tussen `min` en `max` seconden |
+| `swipe` | veeg van (x1,y1) naar (x2,y2) |
+| `tap_template` | zoek een beeld en tik erop (niet gevonden = overslaan) |
+| `wait_template` | **wacht tot** een beeld verschijnt (tot `timeout`), tik er dan op — dit is "if gevonden tik, anders wacht tot het er is" |
+| `if_template` | **gevonden → `then`-stappen, anders → `else`-stappen** (mag genest) |
+
+Voorbeeld van een conditie in JSON (if gevonden tik-continue, anders wacht):
+
+```json
+{
+  "loop": true,
+  "steps": [
+    {"type": "if_template", "template": "templates/continue.png",
+      "then": [{"type": "tap_template", "template": "templates/continue.png"}],
+      "else": [{"type": "wait", "min": 1, "max": 2}]}
+  ]
+}
+```
+
 ## Snelle API
 
 ```python

@@ -16,7 +16,12 @@ Stap-types:
   tap           x, y
   wait          min[, max]   (random tussen min en max seconden; max weglaten = vast)
   swipe         x1, y1, x2, y2[, ms]
-  tap_template  template[, threshold]   (zoekt en tikt; niet gevonden = overslaan)
+  tap_template  template[, threshold]   (zoekt en tikt eenmalig; niet gevonden = overslaan)
+  wait_template template[, threshold, timeout, poll, tap]
+                (wacht tot het beeld verschijnt tot 'timeout' sec, tikt er dan op
+                 tenzij tap=false -> "if gevonden tik, anders wacht tot het er is")
+  if_template   template[, threshold], then: [...stappen...], else: [...stappen...]
+                (gevonden -> then-stappen; niet gevonden -> else-stappen; mag genest)
 
 Gebruik (Python via volledig pad i.v.m. Windows-sandbox):
     python scripts/run_script.py mijnscript.json
@@ -49,12 +54,21 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def collect_template_names(steps: list[dict]):
+    """Loop alle template-namen af, ook in geneste then/else-takken."""
+    for step in steps:
+        if step.get("template"):
+            yield step["template"]
+        for branch in ("then", "else"):
+            if isinstance(step.get(branch), list):
+                yield from collect_template_names(step[branch])
+
+
 def load_templates(steps: list[dict], base: Path) -> dict[str, "cv2.Mat"]:
     """Laad alle template-afbeeldingen die de stappen gebruiken, vooraf."""
     cache: dict[str, "cv2.Mat"] = {}
-    for step in steps:
-        tmpl = step.get("template")
-        if not tmpl or tmpl in cache:
+    for tmpl in collect_template_names(steps):
+        if tmpl in cache:
             continue
         path = (base / tmpl) if not Path(tmpl).is_absolute() else Path(tmpl)
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
@@ -62,6 +76,13 @@ def load_templates(steps: list[dict], base: Path) -> dict[str, "cv2.Mat"]:
             raise ValueError(f"kon template niet lezen: {path}")
         cache[tmpl] = img
     return cache
+
+
+def _find_on_screen(step: dict, serial: str, templates: dict[str, "cv2.Mat"]):
+    """Maak een screenshot en zoek de template van deze stap. Geeft Match | None."""
+    threshold = float(step.get("threshold", config.DEFAULT_MATCH_THRESHOLD))
+    screen = screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
+    return vision.find_template(screen, templates[step["template"]], threshold=threshold)
 
 
 def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"]) -> None:
@@ -76,15 +97,44 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"]) -> None:
         bot_input.swipe(step["x1"], step["y1"], step["x2"], step["y2"],
                         duration_ms=int(step.get("ms", 300)), serial=serial)
     elif kind == "tap_template":
-        threshold = float(step.get("threshold", config.DEFAULT_MATCH_THRESHOLD))
-        screen = screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
-        match = vision.find_template(screen, templates[step["template"]], threshold=threshold)
+        match = _find_on_screen(step, serial, templates)
         if match is None:
             print(f"      (template '{step['template']}' niet gevonden -> overslaan)")
         else:
             bot_input.tap(*match.center, serial=serial)
+    elif kind == "wait_template":
+        # Wacht tot het beeld verschijnt (tot timeout); tik er dan op (tenzij tap=false).
+        timeout = float(step.get("timeout", 10.0))
+        poll = float(step.get("poll", 0.5))
+        do_tap = bool(step.get("tap", True))
+        deadline = time.monotonic() + timeout
+        while True:
+            match = _find_on_screen(step, serial, templates)
+            if match is not None:
+                if do_tap:
+                    bot_input.tap(*match.center, serial=serial)
+                return
+            if time.monotonic() >= deadline:
+                print(f"      (wait_template '{step['template']}' timeout na {timeout}s)")
+                return
+            time.sleep(poll)
+    elif kind == "if_template":
+        # if gevonden -> 'then'-stappen, anders -> 'else'-stappen.
+        match = _find_on_screen(step, serial, templates)
+        branch = step.get("then") if match is not None else step.get("else")
+        found = "gevonden" if match is not None else "niet gevonden"
+        print(f"      (if_template '{step['template']}' {found})")
+        if isinstance(branch, list):
+            run_steps(branch, serial, templates, indent="        ")
     else:
         print(f"      (onbekend stap-type '{kind}' -> overslaan)")
+
+
+def run_steps(steps: list[dict], serial: str, templates: dict[str, "cv2.Mat"],
+              indent: str = "  ") -> None:
+    for i, step in enumerate(steps, 1):
+        print(f"{indent}[{i}] {describe(step)}")
+        run_step(step, serial, templates)
 
 
 def describe(step: dict) -> str:
@@ -98,6 +148,13 @@ def describe(step: dict) -> str:
         return f"swipe ({step['x1']},{step['y1']})->({step['x2']},{step['y2']})"
     if kind == "tap_template":
         return f"tap_template {step.get('template')}{label}"
+    if kind == "wait_template":
+        return (f"wait_template {step.get('template')} "
+                f"(timeout {step.get('timeout', 10)}s, tap={step.get('tap', True)})")
+    if kind == "if_template":
+        n_then = len(step.get("then", []) or [])
+        n_else = len(step.get("else", []) or [])
+        return f"if_template {step.get('template')} (then {n_then}, else {n_else})"
     return kind
 
 
@@ -135,13 +192,11 @@ def main() -> int:
         while True:
             loops += 1
             print(f"--- ronde {loops} ---")
-            for i, step in enumerate(steps, 1):
-                print(f"  [{i}/{len(steps)}] {describe(step)}")
-                try:
-                    run_step(step, serial, templates)
-                except (adb.AdbError, ValueError, KeyError) as exc:
-                    print(f"ERROR in stap {i}: {exc}", file=sys.stderr)
-                    return 1
+            try:
+                run_steps(steps, serial, templates)
+            except (adb.AdbError, ValueError, KeyError) as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 1
             if not loop:
                 print("Klaar (geen loop).")
                 return 0
