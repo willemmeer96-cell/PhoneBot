@@ -204,8 +204,8 @@ def main() -> int:
 
                 misses = 0
                 cycles += 1
-                tree = random.choice(trees)
-                print(f"  [{cycles}] {len(trees)} bomen gevonden -> chop conf {tree.confidence:.3f} "
+                tree = trees[0]  # hoogste confidence = de boom waar je naast staat
+                print(f"  [{cycles}] {len(trees)} match(es) -> chop beste conf {tree.confidence:.3f} "
                       f"(logs nu: {len(logs)})")
                 bot_input.tap(*tree.center, serial=serial)
 
