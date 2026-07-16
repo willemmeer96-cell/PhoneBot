@@ -1,19 +1,19 @@
-"""Visuele script-builder: prik tap-punten en regio's op een emulator-screenshot.
+"""Visuele script-builder: prik tap-punten, regio's en if-condities op een screenshot.
 
-Toont een screenshot van de emulator in een venster. Daarmee bouw je een
-stappen-script (zoals GnomeBot):
+Toont een screenshot van de emulator. Daarmee bouw je een stappen-script (zoals
+GnomeBot), inclusief condities:
 
-  - KLIK op het beeld        -> voegt een 'tap' toe op dat punt
-  - SLEEP een rechthoek      -> knipt een template en voegt een 'tap_template' toe
-  - knop 'Wacht'             -> voegt een 'wait' (random tussen min/max) toe
-  - Omhoog/Omlaag/Verwijder  -> volgorde aanpassen
-  - 'Ververs'                -> nieuwe screenshot ophalen
-  - 'Loop' aanvinken         -> sequentie herhalen
-  - 'Opslaan'                -> script als .json
-  - 'Draai'                  -> voert het script nu uit (via run_script.py)
+  - KLIK op het beeld          -> 'tap' op dat punt
+  - SLEEP een rechthoek        -> knipt een template en maakt (zie radio) een
+                                  'tap_template' of 'wait_template' stap
+  - knop 'If-conditie'         -> volgende sleep wordt de conditie; daarna kies je
+                                  met de radio of nieuwe stappen in de THEN- of
+                                  ELSE-tak van die if komen
+  - knop 'Wacht'               -> 'wait' (random tussen min/max)
+  - Verwijder / Ververs        -> stap wissen / nieuwe screenshot
+  - 'Loop' / 'Opslaan' / 'Draai'
 
-Coordinaten worden op device-resolutie opgeslagen, dus schaal-onafhankelijk van
-het venster.
+Coordinaten worden op device-resolutie opgeslagen (schaal-onafhankelijk).
 
 Gebruik (Python via volledig pad i.v.m. Windows-sandbox):
     python scripts/build_script.py
@@ -39,7 +39,22 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates"
 OUTPUTS = ROOT / "outputs"
 RUN_SCRIPT = Path(__file__).resolve().parent / "run_script.py"
-SUB = 2  # screenshot wordt op halve grootte getoond (device = canvas * SUB)
+SUB = 2  # screenshot op halve grootte tonen (device = canvas * SUB)
+
+
+def describe(step: dict) -> str:
+    t = step["type"]
+    if t == "tap":
+        return f"tap ({step['x']},{step['y']})"
+    if t == "wait":
+        return f"wait {step['min']}..{step['max']}s"
+    if t == "tap_template":
+        return f"tap_template {Path(step['template']).name}"
+    if t == "wait_template":
+        return f"wait_template {Path(step['template']).name} (max {step.get('timeout', 10)}s)"
+    if t == "if_template":
+        return f"if {Path(step['template']).name}?"
+    return t
 
 
 class Builder:
@@ -47,9 +62,12 @@ class Builder:
         self.root = root
         self.root.title("PhoneBot script builder")
         self.steps: list[dict] = []
-        self.full = None          # cv2-beeld op device-resolutie
+        self.full = None
         self.photo: tk.PhotoImage | None = None
         self.drag_start: tuple[int, int] | None = None
+        self.pending_if = False
+        self.active_if: int | None = None          # index in self.steps van de actieve if
+        self.rows: list[tuple] = []                 # (container, index, depth, top_index)
 
         try:
             self.serial = adb.require_device()
@@ -58,7 +76,6 @@ class Builder:
             root.destroy()
             return
 
-        # Layout: canvas links, bediening rechts.
         self.canvas = tk.Canvas(root, bg="black", cursor="crosshair")
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.canvas.bind("<ButtonPress-1>", self.on_press)
@@ -69,37 +86,42 @@ class Builder:
         side.grid(row=0, column=1, sticky="ns")
 
         tk.Label(side, text="Stappen").pack(anchor="w")
-        self.listbox = tk.Listbox(side, width=34, height=22)
+        self.listbox = tk.Listbox(side, width=36, height=18)
         self.listbox.pack(fill="y")
+        self.listbox.bind("<<ListboxSelect>>", self.on_select)
 
         self.loop_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(side, text="Loop (herhaal sequentie)", variable=self.loop_var).pack(anchor="w", pady=(6, 4))
+        tk.Checkbutton(side, text="Loop (herhaal sequentie)", variable=self.loop_var).pack(anchor="w", pady=(6, 2))
 
-        tk.Label(side, text="Sleep maakt:").pack(anchor="w")
+        tk.Label(side, text="Nieuwe stappen in:").pack(anchor="w")
+        self.target = tk.StringVar(value="main")
+        row = tk.Frame(side); row.pack(anchor="w")
+        for text, val in [("hoofdlijst", "main"), ("THEN", "then"), ("ELSE", "else")]:
+            tk.Radiobutton(row, text=text, variable=self.target, value=val).pack(side="left")
+
+        tk.Label(side, text="Sleep maakt:").pack(anchor="w", pady=(4, 0))
         self.drag_mode = tk.StringVar(value="tap_template")
-        tk.Radiobutton(side, text="tap_template (zoek + tik)",
-                       variable=self.drag_mode, value="tap_template").pack(anchor="w")
-        tk.Radiobutton(side, text="wait_template (wacht tot beeld + tik)",
-                       variable=self.drag_mode, value="wait_template").pack(anchor="w")
+        tk.Radiobutton(side, text="tap_template", variable=self.drag_mode, value="tap_template").pack(anchor="w")
+        tk.Radiobutton(side, text="wait_template", variable=self.drag_mode, value="wait_template").pack(anchor="w")
 
         for text, cmd in [
+            ("If-conditie (sleep beeld)", self.start_if),
             ("Wacht toevoegen", self.add_wait),
-            ("Omhoog", lambda: self.move(-1)),
-            ("Omlaag", lambda: self.move(1)),
             ("Verwijder", self.delete_selected),
             ("Ververs screenshot", self.refresh),
             ("Opslaan als .json", self.save),
             ("Draai script nu", self.run_now),
         ]:
-            tk.Button(side, text=text, command=cmd, width=24).pack(pady=2)
+            tk.Button(side, text=text, command=cmd, width=26).pack(pady=2)
 
-        tk.Label(side, text="Klik = tap  |  Sleep = template", fg="gray").pack(anchor="w", pady=(8, 0))
+        self.hint = tk.Label(side, text="Klik = tap  |  Sleep = template", fg="gray")
+        self.hint.pack(anchor="w", pady=(6, 0))
 
         root.rowconfigure(0, weight=1)
         root.columnconfigure(0, weight=1)
         self.refresh()
 
-    # ---- screenshot / tekenen ----
+    # ---------- screenshot / tekenen ----------
     def refresh(self) -> None:
         OUTPUTS.mkdir(exist_ok=True)
         png = OUTPUTS / "_builder.png"
@@ -113,41 +135,69 @@ class Builder:
         self.canvas.config(width=self.photo.width(), height=self.photo.height())
         self.redraw()
 
+    def _draw_markers(self, steps: list[dict], number_prefix: str = "") -> None:
+        for i, step in enumerate(steps, 1):
+            tag = f"{number_prefix}{i}"
+            if step["type"] == "tap":
+                x, y = step["x"] // SUB, step["y"] // SUB
+                self.canvas.create_oval(x - 9, y - 9, x + 9, y + 9, outline="#ff3b3b", width=2)
+                self.canvas.create_text(x, y, text=tag, fill="#ff3b3b")
+            elif step.get("box"):
+                x1, y1, x2, y2 = (v // SUB for v in step["box"])
+                colour = {"wait_template": "#ffd23b", "if_template": "#c07bff"}.get(step["type"], "#3bd1ff")
+                self.canvas.create_rectangle(x1, y1, x2, y2, outline=colour, width=2)
+                self.canvas.create_text(x1 + 10, y1 + 8, text=tag, fill=colour)
+            if step["type"] == "if_template":
+                self._draw_markers(step.get("then", []), f"{tag}T")
+                self._draw_markers(step.get("else", []), f"{tag}E")
+
     def redraw(self) -> None:
         self.canvas.delete("all")
         if self.photo is not None:
             self.canvas.create_image(0, 0, anchor="nw", image=self.photo)
-        for i, step in enumerate(self.steps, 1):
-            if step["type"] == "tap":
-                x, y = step["x"] // SUB, step["y"] // SUB
-                self.canvas.create_oval(x - 9, y - 9, x + 9, y + 9, outline="#ff3b3b", width=2)
-                self.canvas.create_text(x, y, text=str(i), fill="#ff3b3b")
-            elif step.get("box"):
-                x1, y1, x2, y2 = (v // SUB for v in step["box"])
-                colour = "#ffd23b" if step["type"] == "wait_template" else "#3bd1ff"
-                self.canvas.create_rectangle(x1, y1, x2, y2, outline=colour, width=2)
-                self.canvas.create_text(x1 + 10, y1 + 8, text=str(i), fill=colour)
-        self.refresh_list()
+        self._draw_markers(self.steps)
+        self.rebuild_rows()
 
-    def refresh_list(self) -> None:
+    def rebuild_rows(self) -> None:
+        self.rows = []
         self.listbox.delete(0, tk.END)
-        for i, step in enumerate(self.steps, 1):
-            self.listbox.insert(tk.END, f"{i}. {self.describe(step)}")
+        for i, step in enumerate(self.steps):
+            self.rows.append((self.steps, i, 0, i))
+            self.listbox.insert(tk.END, f"{i + 1}. {describe(step)}")
+            if step["type"] == "if_template":
+                for branch in ("then", "else"):
+                    self.rows.append((None, -1, 1, i))
+                    self.listbox.insert(tk.END, f"    {branch}:")
+                    for j, sub in enumerate(step.get(branch, [])):
+                        self.rows.append((step[branch], j, 2, i))
+                        self.listbox.insert(tk.END, f"        {describe(sub)}")
 
-    @staticmethod
-    def describe(step: dict) -> str:
-        t = step["type"]
-        if t == "tap":
-            return f"tap ({step['x']},{step['y']})"
-        if t == "wait":
-            return f"wait {step['min']}..{step['max']}s"
-        if t == "tap_template":
-            return f"tap_template {Path(step['template']).name}"
-        if t == "wait_template":
-            return f"wait_template {Path(step['template']).name} (max {step.get('timeout', 10)}s)"
-        return t
+    def on_select(self, _e: tk.Event) -> None:
+        sel = self.listbox.curselection()
+        if not sel:
+            return
+        _c, _idx, _depth, top = self.rows[sel[0]]
+        self.active_if = top if self.steps[top]["type"] == "if_template" else None
 
-    # ---- muis ----
+    # ---------- stappen toevoegen ----------
+    def target_container(self) -> list | None:
+        where = self.target.get()
+        if where == "main":
+            return self.steps
+        if self.active_if is None or self.steps[self.active_if]["type"] != "if_template":
+            messagebox.showinfo("Geen if geselecteerd",
+                                "Selecteer eerst een if-stap in de lijst om in THEN/ELSE te bouwen.")
+            return None
+        return self.steps[self.active_if].setdefault(where, [])
+
+    def add_step(self, step: dict) -> None:
+        c = self.target_container()
+        if c is None:
+            return
+        c.append(step)
+        self.redraw()
+
+    # ---------- muis ----------
     def on_press(self, e: tk.Event) -> None:
         self.drag_start = (e.x, e.y)
 
@@ -165,12 +215,14 @@ class Builder:
         self.drag_start = None
         self.canvas.delete("rubber")
         if abs(e.x - sx) < 6 and abs(e.y - sy) < 6:
-            self.steps.append({"type": "tap", "x": e.x * SUB, "y": e.y * SUB})
+            if self.pending_if:
+                messagebox.showinfo("If-conditie", "Sleep een kader om het conditie-beeld (niet klikken).")
+                return
+            self.add_step({"type": "tap", "x": e.x * SUB, "y": e.y * SUB})
         else:
-            self.add_template(sx, sy, e.x, e.y)
-        self.redraw()
+            self.make_from_region(sx, sy, e.x, e.y)
 
-    def add_template(self, x1: int, y1: int, x2: int, y2: int) -> None:
+    def make_from_region(self, x1: int, y1: int, x2: int, y2: int) -> None:
         dx1, dy1 = min(x1, x2) * SUB, min(y1, y2) * SUB
         dx2, dy2 = max(x1, x2) * SUB, max(y1, y2) * SUB
         if self.full is None:
@@ -179,20 +231,32 @@ class Builder:
         if crop.size == 0:
             return
         TEMPLATES.mkdir(exist_ok=True)
-        name = f"step_{int(time.time())}.png"
+        name = f"step_{int(time.time() * 1000)}.png"
         cv2.imwrite(str(TEMPLATES / name), crop)
-        step = {
-            "type": self.drag_mode.get(),
-            "template": f"templates/{name}",
-            "threshold": 0.85,
-            "box": [dx1, dy1, dx2, dy2],
-        }
+        tmpl = f"templates/{name}"
+        box = [dx1, dy1, dx2, dy2]
+
+        if self.pending_if:
+            self.pending_if = False
+            self.hint.config(text="Klik = tap  |  Sleep = template", fg="gray")
+            step = {"type": "if_template", "template": tmpl, "threshold": 0.85,
+                    "box": box, "then": [], "else": []}
+            self.steps.append(step)          # if komt altijd in de hoofdlijst
+            self.active_if = len(self.steps) - 1
+            self.redraw()
+            return
+
+        step = {"type": self.drag_mode.get(), "template": tmpl, "threshold": 0.85, "box": box}
         if step["type"] == "wait_template":
             step["timeout"] = 10.0
             step["tap"] = True
-        self.steps.append(step)
+        self.add_step(step)
 
-    # ---- bediening ----
+    # ---------- knoppen ----------
+    def start_if(self) -> None:
+        self.pending_if = True
+        self.hint.config(text="Sleep nu een kader om het conditie-beeld", fg="#c07bff")
+
     def add_wait(self) -> None:
         lo = simpledialog.askfloat("Wacht", "Min. seconden:", initialvalue=3.0, minvalue=0.0)
         if lo is None:
@@ -200,42 +264,31 @@ class Builder:
         hi = simpledialog.askfloat("Wacht", "Max. seconden:", initialvalue=max(lo, 5.0), minvalue=lo)
         if hi is None:
             hi = lo
-        self.steps.append({"type": "wait", "min": lo, "max": hi})
-        self.redraw()
-
-    def selected_index(self) -> int | None:
-        sel = self.listbox.curselection()
-        return sel[0] if sel else None
+        self.add_step({"type": "wait", "min": lo, "max": hi})
 
     def delete_selected(self) -> None:
-        i = self.selected_index()
-        if i is not None:
-            self.steps.pop(i)
-            self.redraw()
-
-    def move(self, delta: int) -> None:
-        i = self.selected_index()
-        if i is None:
+        sel = self.listbox.curselection()
+        if not sel:
             return
-        j = i + delta
-        if 0 <= j < len(self.steps):
-            self.steps[i], self.steps[j] = self.steps[j], self.steps[i]
-            self.redraw()
-            self.listbox.selection_set(j)
+        container, idx, _depth, _top = self.rows[sel[0]]
+        if container is None:      # een then:/else: kop
+            return
+        container.pop(idx)
+        self.active_if = None
+        self.redraw()
 
-    def save(self) -> Path | None:
+    def save(self) -> None:
         if not self.steps:
             messagebox.showinfo("Leeg", "Nog geen stappen.")
-            return None
+            return
         path = filedialog.asksaveasfilename(
             defaultextension=".json", initialdir=str(ROOT),
             initialfile="script.json", filetypes=[("JSON", "*.json")])
         if not path:
-            return None
-        data = {"loop": self.loop_var.get(), "steps": self.steps}
-        Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+            return
+        Path(path).write_text(json.dumps({"loop": self.loop_var.get(), "steps": self.steps}, indent=2),
+                              encoding="utf-8")
         messagebox.showinfo("Opgeslagen", f"Script opgeslagen:\n{path}")
-        return Path(path)
 
     def run_now(self) -> None:
         OUTPUTS.mkdir(exist_ok=True)
