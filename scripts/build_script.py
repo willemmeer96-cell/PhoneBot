@@ -22,6 +22,7 @@ Gebruik (Python via volledig pad i.v.m. Windows-sandbox):
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -33,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2  # noqa: E402
 
-from phonebot import adb, screenshot  # noqa: E402
+from phonebot import adb, config, screenshot  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates"
@@ -291,12 +292,21 @@ class Builder:
         messagebox.showinfo("Opgeslagen", f"Script opgeslagen:\n{path}")
 
     def run_now(self) -> None:
+        if not self.steps:
+            messagebox.showinfo("Leeg", "Nog geen stappen om te draaien.")
+            return
         OUTPUTS.mkdir(exist_ok=True)
         tmp = OUTPUTS / "_run.json"
         tmp.write_text(json.dumps({"loop": self.loop_var.get(), "steps": self.steps}, indent=2),
                        encoding="utf-8")
+        # Geef het child-proces de adb-locatie mee, zodat het zeker een device vindt.
+        env = os.environ.copy()
+        env.setdefault("PHONEBOT_ADB_PATH", config.adb_executable())
         flags = subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, "CREATE_NEW_CONSOLE") else 0
-        subprocess.Popen([sys.executable, str(RUN_SCRIPT), str(tmp)], creationflags=flags)
+        # 'cmd /k' houdt het console-venster OPEN, ook na afloop/een fout, zodat je
+        # de output en eventuele foutmelding kunt lezen (sluit zelf met het kruisje).
+        subprocess.Popen(["cmd", "/k", sys.executable, str(RUN_SCRIPT), str(tmp)],
+                         creationflags=flags, env=env)
 
 
 def main() -> int:
