@@ -1,9 +1,13 @@
 """Slimmere woodcutting-loop: chop -> bij volle inventory de logs droppen -> door.
 
-Boom aantikken kan op twee manieren (kies er een):
-  --tree TREE.png : template van de boom (werkt matig omdat boomkronen wuiven)
-  --tree-xy X,Y   : vaste tik-coordinaat -- ROBUUST bij wuivende bomen. Sta stil
-                    pal naast de boom; de bot tikt telkens exact dat punt.
+Boom aantikken kan op drie manieren (kies er een):
+  --marker KLEUR  : detecteer een gekleurde tile-marker (magenta/cyan/white) en tik
+                    daarop. MEEST ROBUUST: tikt alleen als de marker gevonden is, dus
+                    geen blinde tik op lege grond -> geen gewandel. Markeer de
+                    boom-tegel in de game met die kleur (niet groen: te dicht bij gras).
+  --tree-xy X,Y   : vaste tik-coordinaat. Robuust bij wuivende bomen, maar breekt als
+                    je personage wegloopt of de camera draait.
+  --tree TREE.png : template van de boom (werkt matig: boomkronen wuiven).
 En altijd:
   --log LOG.png   : een enkel log-icoon uit je inventory (om te tellen + te droppen)
 
@@ -43,6 +47,14 @@ import cv2  # noqa: E402
 
 from phonebot import adb, config, input as bot_input, screenshot, vision  # noqa: E402
 
+# HSV-kleurbereiken (OpenCV: H 0-179) voor felle, on-natuurlijke tile-markers.
+# (lower_hsv, upper_hsv, min_area). Groen bewust weggelaten: te dicht bij gras/boom.
+MARKER_PRESETS: dict[str, tuple[tuple[int, int, int], tuple[int, int, int], int]] = {
+    "magenta": ((140, 80, 80), (175, 255, 255), 300),
+    "cyan": ((85, 80, 80), (105, 255, 255), 300),
+    "white": ((0, 0, 210), (179, 40, 255), 300),
+}
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Power-chop: chop en drop bij volle inventory.")
@@ -50,6 +62,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--tree-xy", metavar="X,Y",
                    help="Vaste tik-coordinaat i.p.v. template, bv. 1560,615 "
                         "(robuust bij wuivende bomen; sta wel stil naast de boom)")
+    p.add_argument("--marker", choices=sorted(MARKER_PRESETS),
+                   help="Detecteer een gekleurde tile-marker en tik daarop. "
+                        "ROBUUST: tikt alleen als de marker gevonden is (geen gewandel). "
+                        "Markeer de boom-tegel in de game met deze kleur.")
     p.add_argument("--log", required=True, help="Template van een enkel log-icoon in de inventory")
     p.add_argument("--threshold", type=float, default=config.DEFAULT_MATCH_THRESHOLD,
                    help=f"Match-drempel 0.0-1.0 (default {config.DEFAULT_MATCH_THRESHOLD})")
@@ -106,8 +122,8 @@ def main() -> int:
         print("ERROR: --min-wait mag niet groter zijn dan --max-wait.", file=sys.stderr)
         return 1
 
-    if bool(args.tree) == bool(args.tree_xy):
-        print("ERROR: geef precies EEN van --tree of --tree-xy op.", file=sys.stderr)
+    if sum(bool(x) for x in (args.tree, args.tree_xy, args.marker)) != 1:
+        print("ERROR: geef precies EEN van --tree, --tree-xy of --marker op.", file=sys.stderr)
         return 1
 
     tree_xy: tuple[int, int] | None = None
@@ -151,8 +167,25 @@ def main() -> int:
                 drop_inventory(log_tmpl, args.threshold, serial)
                 continue
 
-            # 2) boom choppen: vaste coordinaat (robuust) of via template.
-            if tree_xy is not None:
+            # 2) boom choppen: marker-kleur, vaste coordinaat, of template.
+            if args.marker is not None:
+                lower, upper, min_area = MARKER_PRESETS[args.marker]
+                blobs = vision.find_color_blobs(screen, lower, upper, min_area=min_area)
+                if not blobs:
+                    misses += 1
+                    print(f"  marker '{args.marker}' niet gevonden ({misses}/{args.max_misses})...")
+                    if misses >= args.max_misses:
+                        print("Gestopt: marker te vaak niet gevonden. "
+                              "Check de kleur/opacity van je tile-marker.")
+                        return 2
+                    time.sleep(random.uniform(1.0, 2.0))
+                    continue
+                misses = 0
+                cycles += 1
+                marker = blobs[0]  # grootste blob
+                print(f"  [{cycles}] marker op {marker.center} (logs nu: {len(logs)})")
+                bot_input.tap(*marker.center, serial=serial)
+            elif tree_xy is not None:
                 cycles += 1
                 print(f"  [{cycles}] tik boom op {tree_xy} (logs nu: {len(logs)})")
                 bot_input.tap(*tree_xy, serial=serial)

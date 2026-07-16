@@ -80,6 +80,50 @@ def find_template(
     )
 
 
+def find_color_blobs(
+    screen: np.ndarray,
+    lower_hsv: tuple[int, int, int],
+    upper_hsv: tuple[int, int, int],
+    min_area: int = 400,
+    max_results: int = 20,
+) -> list[Match]:
+    """Find solid regions of a colour range (bijv. een felle tile-marker).
+
+    Veel robuuster dan template matching voor stabiele, uniek-gekleurde markers:
+    het wuift niet en is ongevoelig voor kleine beeldverschuivingen.
+
+    Args:
+        screen: BGR-beeld (screenshot).
+        lower_hsv, upper_hsv: HSV-ondergrens/bovengrens (OpenCV: H 0-179, S/V 0-255).
+        min_area: negeer blobs kleiner dan dit (pixels).
+        max_results: maximaal aantal blobs.
+
+    Returns:
+        Match-objecten (bounding box van elke blob), grootste eerst. `confidence`
+        bevat hier de vulgraad van de box (0-1), niet een template-score.
+    """
+    if screen is None or screen.size == 0:
+        raise ValueError("Screen image is empty.")
+
+    hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, np.array(lower_hsv, np.uint8), np.array(upper_hsv, np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    blobs: list[Match] = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area < min_area:
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        fill = float(area) / float(max(w * h, 1))
+        blobs.append(Match(x=int(x), y=int(y), width=int(w), height=int(h), confidence=fill))
+
+    blobs.sort(key=lambda m: m.width * m.height, reverse=True)
+    return blobs[:max_results]
+
+
 def find_all_templates(
     screen: np.ndarray,
     template: np.ndarray,
