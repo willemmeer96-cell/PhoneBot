@@ -283,6 +283,27 @@ Voorbeeld van een conditie in JSON (if gevonden tik-continue, anders wacht):
 }
 ```
 
+## Run-logboek (`--log`)
+
+`run_script.py`, `watch.py` en `powerchop.py` accepteren `--log`: dan schrijven ze een
+**getimed logboek + roterende screenshots** naar `outputs/debug/<naam>_<tijd>/`. Handig om
+achteraf te zien wat een script deed en waar het vastliep (bv. een disconnect/ban-scherm).
+
+```powershell
+python scripts/run_script.py mijnscript.json --log
+python scripts/powerchop.py --tree templates/tree.png --log --keep-frames 30
+```
+
+- `log.txt` bewaart de **volledige** actie-geschiedenis met tijdstippen (zo zie je een
+  vastloop-lus of waar het stopte).
+- `frame_*.png` zijn de **laatste N** screenshots op beslismomenten (`--keep-frames`,
+  default 20). Oudste worden gewist, dus de map loopt nooit vol.
+- Oude run-mappen worden automatisch opgeruimd (laatste 10 blijven).
+
+> Zonder `--log` worden er **geen** screenshots opgeslagen — de bot leest ze in het geheugen
+> en gooit ze meteen weg. De `templates/`-map groeit alleen als je in de builder nieuwe
+> regio's sleept (elk kader = één template-bestand).
+
 ## Snelle API
 
 ```python

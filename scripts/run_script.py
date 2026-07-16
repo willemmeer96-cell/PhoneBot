@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2  # noqa: E402
 
-from phonebot import adb, config, input as bot_input, screenshot, vision  # noqa: E402
+from phonebot import adb, config, input as bot_input, recorder, screenshot, vision  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +51,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("script", help="Pad naar het .json-script")
     p.add_argument("--max-loops", type=int, default=0,
                    help="Stop na dit aantal keer de sequentie (0 = oneindig)")
+    p.add_argument("--log", action="store_true",
+                   help="Schrijf een run-logboek + roterende screenshots naar outputs/debug/")
+    p.add_argument("--keep-frames", type=int, default=20,
+                   help="Aantal recente screenshots dat bewaard blijft bij --log (default 20)")
     return p.parse_args()
 
 
@@ -79,14 +83,16 @@ def load_templates(steps: list[dict], base: Path) -> dict[str, "cv2.Mat"]:
 
 
 def _find_on_screen(step: dict, serial: str, templates: dict[str, "cv2.Mat"]):
-    """Maak een screenshot en zoek de template van deze stap. Geeft Match | None."""
+    """Maak een screenshot en zoek de template. Geeft (Match | None, screen)."""
     threshold = float(step.get("threshold", config.DEFAULT_MATCH_THRESHOLD))
     screen = screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
-    return vision.find_template(screen, templates[step["template"]], threshold=threshold)
+    return vision.find_template(screen, templates[step["template"]], threshold=threshold), screen
 
 
-def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"]) -> None:
+def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
+             rec: recorder.Recorder) -> None:
     kind = step.get("type")
+    name = Path(step["template"]).name if step.get("template") else ""
     if kind == "tap":
         bot_input.tap(step["x"], step["y"], serial=serial)
     elif kind == "wait":
@@ -97,7 +103,8 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"]) -> None:
         bot_input.swipe(step["x1"], step["y1"], step["x2"], step["y2"],
                         duration_ms=int(step.get("ms", 300)), serial=serial)
     elif kind == "tap_template":
-        match = _find_on_screen(step, serial, templates)
+        match, screen = _find_on_screen(step, serial, templates)
+        rec.frame(screen, f"tap_template {name} {'gevonden' if match else 'niet gevonden'}")
         if match is None:
             print(f"      (template '{step['template']}' niet gevonden -> overslaan)")
         else:
@@ -109,32 +116,37 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"]) -> None:
         do_tap = bool(step.get("tap", True))
         deadline = time.monotonic() + timeout
         while True:
-            match = _find_on_screen(step, serial, templates)
+            match, screen = _find_on_screen(step, serial, templates)
             if match is not None:
+                rec.frame(screen, f"wait_template {name} verschenen")
                 if do_tap:
                     bot_input.tap(*match.center, serial=serial)
                 return
             if time.monotonic() >= deadline:
+                rec.frame(screen, f"wait_template {name} TIMEOUT na {timeout}s")
                 print(f"      (wait_template '{step['template']}' timeout na {timeout}s)")
                 return
             time.sleep(poll)
     elif kind == "if_template":
         # if gevonden -> 'then'-stappen, anders -> 'else'-stappen.
-        match = _find_on_screen(step, serial, templates)
+        match, screen = _find_on_screen(step, serial, templates)
         branch = step.get("then") if match is not None else step.get("else")
-        found = "gevonden" if match is not None else "niet gevonden"
+        found = "gevonden -> then" if match is not None else "niet gevonden -> else"
+        rec.frame(screen, f"if {name} {found}")
         print(f"      (if_template '{step['template']}' {found})")
         if isinstance(branch, list):
-            run_steps(branch, serial, templates, indent="        ")
+            run_steps(branch, serial, templates, rec, indent="        ")
     else:
         print(f"      (onbekend stap-type '{kind}' -> overslaan)")
 
 
 def run_steps(steps: list[dict], serial: str, templates: dict[str, "cv2.Mat"],
-              indent: str = "  ") -> None:
+              rec: recorder.Recorder, indent: str = "  ") -> None:
     for i, step in enumerate(steps, 1):
-        print(f"{indent}[{i}] {describe(step)}")
-        run_step(step, serial, templates)
+        desc = describe(step)
+        print(f"{indent}[{i}] {desc}")
+        rec.log(f"{indent.strip()}[{i}] {desc}")
+        run_step(step, serial, templates, rec)
 
 
 def describe(step: dict) -> str:
@@ -184,6 +196,11 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    rec = recorder.Recorder(f"script_{script_path.stem}", keep_frames=args.keep_frames,
+                            enabled=args.log)
+    if args.log and rec.dir is not None:
+        print(f"Logboek: {rec.dir}")
+
     print(f"Script '{script_path.name}' op {serial}: {len(steps)} stappen, "
           f"loop={'aan' if loop else 'uit'}. Stop met Ctrl+C.")
 
@@ -192,18 +209,23 @@ def main() -> int:
         while True:
             loops += 1
             print(f"--- ronde {loops} ---")
+            rec.log(f"--- ronde {loops} ---")
             try:
-                run_steps(steps, serial, templates)
+                run_steps(steps, serial, templates, rec)
             except (adb.AdbError, ValueError, KeyError) as exc:
+                rec.log(f"ERROR: {exc}")
                 print(f"ERROR: {exc}", file=sys.stderr)
                 return 1
             if not loop:
+                rec.log("Klaar (geen loop).")
                 print("Klaar (geen loop).")
                 return 0
             if args.max_loops and loops >= args.max_loops:
+                rec.log(f"Klaar: {loops} rondes (--max-loops).")
                 print(f"Klaar: {loops} rondes (--max-loops bereikt).")
                 return 0
     except KeyboardInterrupt:
+        rec.log(f"Gestopt door gebruiker na {loops} ronde(s).")
         print(f"\nGestopt door gebruiker na {loops} ronde(s).")
         return 0
 

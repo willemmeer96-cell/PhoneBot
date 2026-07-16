@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2  # noqa: E402
 
-from phonebot import adb, config, input as bot_input, screenshot, vision  # noqa: E402
+from phonebot import adb, config, input as bot_input, recorder, screenshot, vision  # noqa: E402
 
 # HSV-kleurbereiken (OpenCV: H 0-179) voor felle, on-natuurlijke tile-markers.
 # (lower_hsv, upper_hsv, min_area). Groen bewust weggelaten: te dicht bij gras/boom.
@@ -77,6 +77,10 @@ def parse_args() -> argparse.Namespace:
                    help="Stop na dit aantal chop-cycli (0 = oneindig)")
     p.add_argument("--max-misses", type=int, default=6,
                    help="Stop na zoveel keer achter elkaar geen boom vinden (default 6)")
+    p.add_argument("--log", action="store_true",
+                   help="Schrijf een run-logboek + roterende screenshots naar outputs/debug/")
+    p.add_argument("--keep-frames", type=int, default=20,
+                   help="Aantal recente screenshots bij --log (default 20)")
     return p.parse_args()
 
 
@@ -148,6 +152,9 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    rec = recorder.Recorder("powerchop", keep_frames=args.keep_frames, enabled=args.log)
+    if args.log and rec.dir is not None:
+        print(f"Logboek: {rec.dir}")
     print(f"Power-chop op {serial}. Vol = {args.full} logs. Stop met Ctrl+C.")
 
     cycles = 0
@@ -164,6 +171,7 @@ def main() -> int:
             logs = vision.find_all_templates(screen, log_tmpl, threshold=args.threshold, max_results=40)
             if len(logs) >= args.full:
                 print(f"Inventory vol ({len(logs)} logs) -> droppen...")
+                rec.frame(screen, f"inventory vol ({len(logs)} logs) -> droppen")
                 drop_inventory(log_tmpl, args.threshold, serial)
                 continue
 
@@ -175,6 +183,7 @@ def main() -> int:
                     misses += 1
                     print(f"  marker '{args.marker}' niet gevonden ({misses}/{args.max_misses})...")
                     if misses >= args.max_misses:
+                        rec.frame(screen, "marker te vaak niet gevonden -> stop")
                         print("Gestopt: marker te vaak niet gevonden. "
                               "Check de kleur/opacity van je tile-marker.")
                         return 2
@@ -184,10 +193,12 @@ def main() -> int:
                 cycles += 1
                 marker = blobs[0]  # grootste blob
                 print(f"  [{cycles}] marker op {marker.center} (logs nu: {len(logs)})")
+                rec.frame(screen, f"[{cycles}] chop via marker {marker.center}, logs {len(logs)}")
                 bot_input.tap(*marker.center, serial=serial)
             elif tree_xy is not None:
                 cycles += 1
                 print(f"  [{cycles}] tik boom op {tree_xy} (logs nu: {len(logs)})")
+                rec.frame(screen, f"[{cycles}] chop op {tree_xy}, logs {len(logs)}")
                 bot_input.tap(*tree_xy, serial=serial)
             else:
                 trees = vision.find_all_templates(
@@ -196,7 +207,9 @@ def main() -> int:
                 if not trees:
                     misses += 1
                     print(f"  geen boom ({misses}/{args.max_misses})...")
+                    rec.log(f"geen boom gevonden ({misses}/{args.max_misses})")
                     if misses >= args.max_misses:
+                        rec.frame(screen, "te vaak geen boom -> stop")
                         print("Gestopt: te vaak geen boom gevonden.")
                         return 2
                     time.sleep(random.uniform(1.0, 2.0))
@@ -207,6 +220,7 @@ def main() -> int:
                 tree = trees[0]  # hoogste confidence = de boom waar je naast staat
                 print(f"  [{cycles}] {len(trees)} match(es) -> chop beste conf {tree.confidence:.3f} "
                       f"(logs nu: {len(logs)})")
+                rec.frame(screen, f"[{cycles}] chop conf {tree.confidence:.2f}, logs {len(logs)}")
                 bot_input.tap(*tree.center, serial=serial)
 
             if args.max_cycles and cycles >= args.max_cycles:
@@ -215,6 +229,7 @@ def main() -> int:
 
             time.sleep(random.uniform(args.min_wait, args.max_wait))
     except KeyboardInterrupt:
+        rec.log(f"Gestopt door gebruiker na {cycles} chop-cycli.")
         print(f"\nGestopt door gebruiker na {cycles} chop-cycli.")
         return 0
 

@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2  # noqa: E402
 
-from phonebot import adb, config, input as bot_input, screenshot, vision  # noqa: E402
+from phonebot import adb, config, input as bot_input, recorder, screenshot, vision  # noqa: E402
 
 
 class Watch:
@@ -52,6 +52,10 @@ def parse_args() -> argparse.Namespace:
                    help="Stop na de eerste succesvolle tik (wacht-tot-X-en-klik)")
     p.add_argument("--max-triggers", type=int, default=0,
                    help="Stop na dit aantal tikken totaal (0 = oneindig)")
+    p.add_argument("--log", action="store_true",
+                   help="Schrijf een run-logboek + roterende screenshots naar outputs/debug/")
+    p.add_argument("--keep-frames", type=int, default=20,
+                   help="Aantal recente screenshots bij --log (default 20)")
     return p.parse_args()
 
 
@@ -77,6 +81,10 @@ def main() -> int:
     except (FileNotFoundError, ValueError, adb.AdbError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+
+    rec = recorder.Recorder("watch", keep_frames=args.keep_frames, enabled=args.log)
+    if args.log and rec.dir is not None:
+        print(f"Logboek: {rec.dir}")
 
     names = ", ".join(w.path.name for w in watches)
     print(f"Watcher op {serial}. Bewaakt: {names}. Stop met Ctrl+C.")
@@ -105,19 +113,24 @@ def main() -> int:
                 w.last_trigger = now
                 triggers += 1
                 cx, cy = match.center
-                print(f"  [{triggers}] '{w.path.name}' verschenen (conf {match.confidence:.3f}) "
-                      f"-> tik ({cx}, {cy})")
+                msg = (f"[{triggers}] '{w.path.name}' verschenen (conf {match.confidence:.3f}) "
+                       f"-> tik ({cx}, {cy})")
+                print(f"  {msg}")
+                rec.frame(screen, msg)
                 bot_input.tap(cx, cy, serial=serial)
 
                 if args.once:
+                    rec.log("Klaar: eerste tik gedaan (--once).")
                     print("Klaar: eerste tik gedaan (--once).")
                     return 0
                 if args.max_triggers and triggers >= args.max_triggers:
+                    rec.log(f"Klaar: {triggers} tikken (--max-triggers).")
                     print(f"Klaar: {triggers} tikken (--max-triggers bereikt).")
                     return 0
 
             time.sleep(args.interval)
     except KeyboardInterrupt:
+        rec.log(f"Gestopt door gebruiker na {triggers} tikken.")
         print(f"\nGestopt door gebruiker na {triggers} tikken.")
         return 0
 
