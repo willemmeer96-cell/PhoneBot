@@ -1,0 +1,30 @@
+{
+  "loop": true,
+  "steps": [
+    {
+      "type": "if_template",
+      "template": "templates/step_1784192966705.png",
+      "threshold": 0.85,
+      "box": [
+        896,
+        88,
+        1920,
+        938
+      ],
+      "then": [
+        {
+          "type": "tap",
+          "x": 1414,
+          "y": 654
+        }
+      ],
+      "else": [
+        {
+          "type": "wait",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ]
+    }
+  ]
+}

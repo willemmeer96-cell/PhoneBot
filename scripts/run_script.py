@@ -68,13 +68,31 @@ def collect_template_names(steps: list[dict]):
                 yield from collect_template_names(step[branch])
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent  # phonebot-repo (bevat templates/)
+
+
+def resolve_template(tmpl: str, base: Path) -> Path:
+    """Vind een template-pad: absoluut, anders naast het script, anders in de project-root.
+
+    Zo werkt een relatief pad als 'templates/x.png' ook als het script in outputs/ of
+    ergens anders staat -- de templates zelf leven altijd in <project>/templates/.
+    """
+    p = Path(tmpl)
+    if p.is_absolute():
+        return p
+    for cand in (base / tmpl, PROJECT_ROOT / tmpl):
+        if cand.is_file():
+            return cand
+    return base / tmpl  # laat imread falen met een duidelijk pad
+
+
 def load_templates(steps: list[dict], base: Path) -> dict[str, "cv2.Mat"]:
     """Laad alle template-afbeeldingen die de stappen gebruiken, vooraf."""
     cache: dict[str, "cv2.Mat"] = {}
     for tmpl in collect_template_names(steps):
         if tmpl in cache:
             continue
-        path = (base / tmpl) if not Path(tmpl).is_absolute() else Path(tmpl)
+        path = resolve_template(tmpl, base)
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError(f"kon template niet lezen: {path}")
