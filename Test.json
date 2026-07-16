@@ -1,0 +1,118 @@
+{
+  "loop": true,
+  "steps": [
+    {
+      "type": "if_template",
+      "template": "templates/step_1784197503873.png",
+      "threshold": 0.85,
+      "box": [
+        1344,
+        744,
+        1366,
+        766
+      ],
+      "then": [
+        {
+          "type": "wait_template",
+          "template": "templates/step_1784197529297.png",
+          "threshold": 0.85,
+          "box": [
+            1280,
+            638,
+            1374,
+            716
+          ],
+          "timeout": 10.0,
+          "tap": true
+        }
+      ],
+      "else": []
+    },
+    {
+      "type": "if_template",
+      "template": "templates/step_1784197546577.png",
+      "threshold": 0.85,
+      "box": [
+        1276,
+        634,
+        1382,
+        718
+      ],
+      "then": [
+        {
+          "type": "tap",
+          "x": 1328,
+          "y": 640
+        },
+        {
+          "type": "wait",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ],
+      "else": [
+        {
+          "type": "wait",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ]
+    },
+    {
+      "type": "if_template",
+      "template": "templates/step_1784197683880.png",
+      "threshold": 0.85,
+      "box": [
+        1358,
+        458,
+        1494,
+        706
+      ],
+      "then": [
+        {
+          "type": "tap_template",
+          "template": "templates/step_1784197697744.png",
+          "threshold": 0.85,
+          "box": [
+            1420,
+            704,
+            1510,
+            756
+          ]
+        }
+      ],
+      "else": [
+        {
+          "type": "wait",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ]
+    },
+    {
+      "type": "if_template",
+      "template": "templates/step_1784197747096.png",
+      "threshold": 0.85,
+      "box": [
+        1382,
+        522,
+        1478,
+        588
+      ],
+      "then": [
+        {
+          "type": "tap",
+          "x": 1496,
+          "y": 742
+        }
+      ],
+      "else": [
+        {
+          "type": "wait",
+          "min": 3.0,
+          "max": 5.0
+        }
+      ]
+    }
+  ]
+}

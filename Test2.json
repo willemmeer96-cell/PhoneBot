@@ -1,0 +1,786 @@
+{
+  "loop": true,
+  "steps": [
+    {
+      "type": "if_template",
+      "template": "templates/step_1784198416246.png",
+      "threshold": 0.91,
+      "box": [
+        2454,
+        1142,
+        2698,
+        1232
+      ],
+      "then": [
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            580,
+            2232,
+            670
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2256,
+            586,
+            2362,
+            672
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            590,
+            2454,
+            664
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2476,
+            586,
+            2560,
+            666
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2128,
+            706,
+            2238,
+            774
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2262,
+            704,
+            2356,
+            776
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2388,
+            702,
+            2456,
+            774
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2472,
+            714,
+            2562,
+            772
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            802,
+            2210,
+            870
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2254,
+            802,
+            2340,
+            872
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2386,
+            808,
+            2450,
+            862
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2484,
+            796,
+            2554,
+            866
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            902,
+            2194,
+            964
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2260,
+            906,
+            2340,
+            962
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            890,
+            2454,
+            946
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2480,
+            890,
+            2558,
+            960
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2120,
+            982,
+            2202,
+            1052
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2264,
+            992,
+            2350,
+            1052
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2378,
+            990,
+            2450,
+            1050
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2478,
+            982,
+            2546,
+            1054
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2126,
+            1070,
+            2218,
+            1134
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2266,
+            1078,
+            2356,
+            1136
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            1072,
+            2452,
+            1132
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2478,
+            1066,
+            2544,
+            1124
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2130,
+            1152,
+            2218,
+            1214
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2276,
+            1154,
+            2356,
+            1208
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2382,
+            1150,
+            2444,
+            1212
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2466,
+            1144,
+            2554,
+            1214
+          ],
+          "mode": "random",
+          "padding": 4
+        }
+      ],
+      "else": []
+    },
+    {
+      "type": "if_template",
+      "template": "templates/step_1784198416246.png",
+      "threshold": 0.89,
+      "box": [
+        2454,
+        1142,
+        2698,
+        1232
+      ],
+      "then": [
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            580,
+            2232,
+            670
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2256,
+            586,
+            2362,
+            672
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            590,
+            2454,
+            664
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2476,
+            586,
+            2560,
+            666
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2128,
+            706,
+            2238,
+            774
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2262,
+            704,
+            2356,
+            776
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2388,
+            702,
+            2456,
+            774
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2472,
+            714,
+            2562,
+            772
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            802,
+            2210,
+            870
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2254,
+            802,
+            2340,
+            872
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2386,
+            808,
+            2450,
+            862
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2484,
+            796,
+            2554,
+            866
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2122,
+            902,
+            2194,
+            964
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2260,
+            906,
+            2340,
+            962
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            890,
+            2454,
+            946
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2480,
+            890,
+            2558,
+            960
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2120,
+            982,
+            2202,
+            1052
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2264,
+            992,
+            2350,
+            1052
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2378,
+            990,
+            2450,
+            1050
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2478,
+            982,
+            2546,
+            1054
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2126,
+            1070,
+            2218,
+            1134
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2266,
+            1078,
+            2356,
+            1136
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2374,
+            1072,
+            2452,
+            1132
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2478,
+            1066,
+            2544,
+            1124
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2130,
+            1152,
+            2218,
+            1214
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2276,
+            1154,
+            2356,
+            1208
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2382,
+            1150,
+            2444,
+            1212
+          ],
+          "mode": "random",
+          "padding": 4
+        },
+        {
+          "type": "tap_region",
+          "box": [
+            2466,
+            1144,
+            2554,
+            1214
+          ],
+          "mode": "random",
+          "padding": 4
+        }
+      ],
+      "else": []
+    },
+    {
+      "type": "if_template",
+      "template": "templates/step_1784198602868.png",
+      "threshold": 0.5,
+      "box": [
+        1088,
+        464,
+        1378,
+        692
+      ],
+      "then": [
+        {
+          "type": "tap_template",
+          "template": "templates/step_1784199711385.png",
+          "threshold": 0.3,
+          "box": [
+            1316,
+            768,
+            1468,
+            900
+          ],
+          "templates": [
+            "templates/step_1784199852720.png",
+            "templates/step_1784201148820.png",
+            "templates/step_1784201256620.png",
+            "templates/step_1784201367083.png",
+            "templates/step_1784201766418.png"
+          ],
+          "boxes": [
+            [
+              1112,
+              502,
+              1242,
+              570
+            ],
+            [
+              1472,
+              752,
+              1558,
+              826
+            ],
+            [
+              1328,
+              594,
+              1508,
+              742
+            ],
+            [
+              1298,
+              648,
+              1486,
+              820
+            ],
+            [
+              1242,
+              688,
+              1338,
+              798
+            ]
+          ]
+        },
+        {
+          "type": "wait_template",
+          "template": "templates/step_1784199341050.png",
+          "threshold": 0.85,
+          "box": [
+            1168,
+            640,
+            1360,
+            762
+          ],
+          "timeout": 10.0,
+          "tap": true
+        }
+      ],
+      "else": [
+        {
+          "type": "wait_template",
+          "template": "templates/step_1784198661796.png",
+          "threshold": 0.85,
+          "box": [
+            1110,
+            482,
+            1364,
+            694
+          ],
+          "timeout": 10.0,
+          "tap": true
+        }
+      ],
+      "templates": [
+        "templates/step_1784199592985.png",
+        "templates/step_1784199620713.png",
+        "templates/step_1784201127515.png",
+        "templates/step_1784201248835.png",
+        "templates/step_1784201361091.png",
+        "templates/step_1784201755458.png"
+      ],
+      "boxes": [
+        [
+          1218,
+          684,
+          1458,
+          858
+        ],
+        [
+          1298,
+          808,
+          1454,
+          894
+        ],
+        [
+          1390,
+          680,
+          1528,
+          748
+        ],
+        [
+          1280,
+          656,
+          1500,
+          806
+        ],
+        [
+          1276,
+          570,
+          1582,
+          794
+        ],
+        [
+          1200,
+          686,
+          1346,
+          802
+        ]
+      ]
+    }
+  ]
+}

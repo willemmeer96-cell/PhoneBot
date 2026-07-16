@@ -7,7 +7,10 @@ Scriptformaat (zie ook build_script.py die deze bestanden maakt):
       "steps": [
         {"type": "tap", "x": 1544, "y": 620, "label": "chop"},
         {"type": "wait", "min": 3.0, "max": 6.0},
+        {"type": "tap_region", "box": [100, 200, 300, 260], "mode": "random"},
         {"type": "tap_template", "template": "templates/x.png", "threshold": 0.85},
+        {"type": "tap_template", "template": "templates/a.png",
+         "templates": ["templates/b.png", "templates/c.png"], "threshold": 0.85},
         {"type": "swipe", "x1": 100, "y1": 200, "x2": 100, "y2": 800, "ms": 400}
       ]
     }
@@ -15,8 +18,17 @@ Scriptformaat (zie ook build_script.py die deze bestanden maakt):
 Stap-types:
   tap           x, y
   wait          min[, max]   (random tussen min en max seconden; max weglaten = vast)
+  tap_region    box [x1,y1,x2,y2][, mode=random|center, padding]
+                (tikt binnen een vaste veilige rechthoek, zonder beeldherkenning)
   swipe         x1, y1, x2, y2[, ms]
-  tap_template  template[, threshold]   (zoekt en tikt eenmalig; niet gevonden = overslaan)
+  tap_template  template[, templates, threshold]
+                (zoekt een of meer alternatieve templates en tikt de beste match;
+                 niet gevonden = overslaan)
+  tap_all_template  template[, templates, threshold, region, delay, repeat, max_taps]
+                (tikt ALLE treffers aan i.p.v. alleen de beste -> bv. "drop alles wat
+                 op een log lijkt" met tap-to-drop aan. 'region' [x1,y1,x2,y2] beperkt
+                 het zoeken tot bv. je inventory; 'repeat' scant opnieuw tot er niets
+                 meer gevonden wordt; 'max_taps' is de veiligheidsrem)
   wait_template template[, threshold, timeout, poll, tap]
                 (wacht tot het beeld verschijnt tot 'timeout' sec, tikt er dan op
                  tenzij tap=false -> "if gevonden tik, anders wacht tot het er is")
@@ -58,11 +70,21 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def step_template_names(step: dict) -> list[str]:
+    """Return primary + OR-template names for a step, without duplicates."""
+    names: list[str] = []
+    if step.get("template"):
+        names.append(step["template"])
+    for tmpl in step.get("templates", []) or []:
+        if tmpl and tmpl not in names:
+            names.append(tmpl)
+    return names
+
+
 def collect_template_names(steps: list[dict]):
     """Loop alle template-namen af, ook in geneste then/else-takken."""
     for step in steps:
-        if step.get("template"):
-            yield step["template"]
+        yield from step_template_names(step)
         for branch in ("then", "else"):
             if isinstance(step.get(branch), list):
                 yield from collect_template_names(step[branch])
@@ -101,10 +123,55 @@ def load_templates(steps: list[dict], base: Path) -> dict[str, "cv2.Mat"]:
 
 
 def _find_on_screen(step: dict, serial: str, templates: dict[str, "cv2.Mat"]):
-    """Maak een screenshot en zoek de template. Geeft (Match | None, screen)."""
+    """Maak een screenshot en zoek primary/OR templates.
+
+    Geeft (Match | None, screen, template_name | None). Als meerdere templates
+    matchen, wint de hoogste confidence.
+    """
     threshold = float(step.get("threshold", config.DEFAULT_MATCH_THRESHOLD))
     screen = screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
-    return vision.find_template(screen, templates[step["template"]], threshold=threshold), screen
+    best = None
+    best_name = None
+    for name in step_template_names(step):
+        match = vision.find_template(screen, templates[name], threshold=threshold)
+        if match is not None and (best is None or match.confidence > best.confidence):
+            best = match
+            best_name = name
+    return best, screen, best_name
+
+
+def _find_all_in_region(screen, step: dict, templates: dict[str, "cv2.Mat"],
+                        threshold: float) -> list[vision.Match]:
+    """Vind ALLE matches van primary+OR templates, eventueel binnen 'region'.
+
+    Coordinaten komen terug in volledige-scherm-ruimte. Treffers die elkaar
+    overlappen (bv. twee OR-templates op hetzelfde slot) worden ontdubbeld.
+    """
+    region = step.get("region")
+    if region:
+        x1, y1, x2, y2 = [int(v) for v in region]
+        left, right = sorted([x1, x2])
+        top, bottom = sorted([y1, y2])
+        sub = screen[top:bottom, left:right]
+        off_x, off_y = left, top
+    else:
+        sub, off_x, off_y = screen, 0, 0
+    if sub is None or sub.size == 0:
+        return []
+
+    found: list[vision.Match] = []
+    for nm in step_template_names(step):
+        for m in vision.find_all_templates(sub, templates[nm], threshold=threshold, max_results=40):
+            found.append(vision.Match(x=m.x + off_x, y=m.y + off_y, width=m.width,
+                                      height=m.height, confidence=m.confidence))
+
+    found.sort(key=lambda m: m.confidence, reverse=True)
+    kept: list[vision.Match] = []
+    for m in found:
+        if any(abs(m.x - k.x) < k.width * 0.5 and abs(m.y - k.y) < k.height * 0.5 for k in kept):
+            continue
+        kept.append(m)
+    return kept
 
 
 def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
@@ -113,6 +180,25 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
     name = Path(step["template"]).name if step.get("template") else ""
     if kind == "tap":
         bot_input.tap(step["x"], step["y"], serial=serial)
+    elif kind == "tap_region":
+        x1, y1, x2, y2 = [int(v) for v in step["box"]]
+        left, right = sorted([x1, x2])
+        top, bottom = sorted([y1, y2])
+        padding = max(0, int(step.get("padding", 4)))
+        if right - left > padding * 2:
+            left += padding
+            right -= padding
+        if bottom - top > padding * 2:
+            top += padding
+            bottom -= padding
+        if str(step.get("mode", "random")).lower() == "center":
+            x = (left + right) // 2
+            y = (top + bottom) // 2
+        else:
+            x = random.randint(left, right)
+            y = random.randint(top, bottom)
+        print(f"      (tap_region -> {x},{y})")
+        bot_input.tap(x, y, serial=serial)
     elif kind == "wait":
         lo = float(step.get("min", 1.0))
         hi = float(step.get("max", lo))
@@ -121,12 +207,37 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
         bot_input.swipe(step["x1"], step["y1"], step["x2"], step["y2"],
                         duration_ms=int(step.get("ms", 300)), serial=serial)
     elif kind == "tap_template":
-        match, screen = _find_on_screen(step, serial, templates)
-        rec.frame(screen, f"tap_template {name} {'gevonden' if match else 'niet gevonden'}")
+        match, screen, matched_name = _find_on_screen(step, serial, templates)
+        hit = Path(matched_name).name if matched_name else name
+        rec.frame(screen, f"tap_template {hit} {'gevonden' if match else 'niet gevonden'}")
         if match is None:
-            print(f"      (template '{step['template']}' niet gevonden -> overslaan)")
+            print(f"      (template(s) '{step_template_names(step)}' niet gevonden -> overslaan)")
         else:
+            print(f"      (match '{matched_name}' conf {match.confidence:.3f})")
             bot_input.tap(*match.center, serial=serial)
+    elif kind == "tap_all_template":
+        # Tik ALLE treffers aan (bv. alle logs weg-droppen met tap-to-drop).
+        threshold = float(step.get("threshold", config.DEFAULT_MATCH_THRESHOLD))
+        delay = float(step.get("delay", 0.25))
+        repeat = bool(step.get("repeat", True))
+        max_taps = int(step.get("max_taps", 40))
+        total = 0
+        for _round in range(20 if repeat else 1):
+            screen = screenshot.screenshot_to_cv2(screenshot.capture_png(serial))
+            matches = _find_all_in_region(screen, step, templates, threshold)
+            rec.frame(screen, f"tap_all {name}: {len(matches)} gevonden (totaal {total})")
+            if not matches:
+                break
+            for m in matches:
+                if total >= max_taps:
+                    break
+                bot_input.tap(*m.center, serial=serial)
+                total += 1
+                time.sleep(delay)
+            if not repeat or total >= max_taps:
+                break
+            time.sleep(0.4)  # scherm laten bijwerken voor de her-scan
+        print(f"      (tap_all_template -> {total} getikt)")
     elif kind == "wait_template":
         # Wacht tot het beeld verschijnt (tot timeout); tik er dan op (tenzij tap=false).
         timeout = float(step.get("timeout", 10.0))
@@ -134,9 +245,11 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
         do_tap = bool(step.get("tap", True))
         deadline = time.monotonic() + timeout
         while True:
-            match, screen = _find_on_screen(step, serial, templates)
+            match, screen, matched_name = _find_on_screen(step, serial, templates)
             if match is not None:
-                rec.frame(screen, f"wait_template {name} verschenen")
+                hit = Path(matched_name).name if matched_name else name
+                rec.frame(screen, f"wait_template {hit} verschenen")
+                print(f"      (match '{matched_name}' conf {match.confidence:.3f})")
                 if do_tap:
                     bot_input.tap(*match.center, serial=serial)
                 return
@@ -147,9 +260,9 @@ def run_step(step: dict, serial: str, templates: dict[str, "cv2.Mat"],
             time.sleep(poll)
     elif kind == "if_template":
         # if gevonden -> 'then'-stappen, anders -> 'else'-stappen.
-        match, screen = _find_on_screen(step, serial, templates)
+        match, screen, matched_name = _find_on_screen(step, serial, templates)
         branch = step.get("then") if match is not None else step.get("else")
-        found = "gevonden -> then" if match is not None else "niet gevonden -> else"
+        found = f"{matched_name} gevonden -> then" if match is not None else "niet gevonden -> else"
         rec.frame(screen, f"if {name} {found}")
         print(f"      (if_template '{step['template']}' {found})")
         if isinstance(branch, list):
@@ -172,19 +285,32 @@ def describe(step: dict) -> str:
     label = f" [{step['label']}]" if step.get("label") else ""
     if kind == "tap":
         return f"tap ({step['x']},{step['y']}){label}"
+    if kind == "tap_region":
+        return f"tap_region {step.get('box')} mode={step.get('mode', 'random')}{label}"
     if kind == "wait":
         return f"wait {step.get('min')}..{step.get('max', step.get('min'))}s"
     if kind == "swipe":
         return f"swipe ({step['x1']},{step['y1']})->({step['x2']},{step['y2']})"
     if kind == "tap_template":
-        return f"tap_template {step.get('template')}{label}"
+        extra = len(step.get("templates", []) or [])
+        suffix = f" +{extra} OR" if extra else ""
+        return f"tap_template {step.get('template')}{suffix}{label}"
+    if kind == "tap_all_template":
+        extra = len(step.get("templates", []) or [])
+        suffix = f" +{extra} OR" if extra else ""
+        where = " in region" if step.get("region") else ""
+        return f"tap_all_template {step.get('template')}{suffix}{where}{label}"
     if kind == "wait_template":
+        extra = len(step.get("templates", []) or [])
+        suffix = f" +{extra} OR" if extra else ""
         return (f"wait_template {step.get('template')} "
-                f"(timeout {step.get('timeout', 10)}s, tap={step.get('tap', True)})")
+                f"(timeout {step.get('timeout', 10)}s, tap={step.get('tap', True)}){suffix}")
     if kind == "if_template":
         n_then = len(step.get("then", []) or [])
         n_else = len(step.get("else", []) or [])
-        return f"if_template {step.get('template')} (then {n_then}, else {n_else})"
+        extra = len(step.get("templates", []) or [])
+        suffix = f" +{extra} OR" if extra else ""
+        return f"if_template {step.get('template')}{suffix} (then {n_then}, else {n_else})"
     return kind
 
 
