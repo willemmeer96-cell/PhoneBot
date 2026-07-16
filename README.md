@@ -214,6 +214,31 @@ Twee handige core-helpers die hierbij horen:
 - `input.long_press(x, y, duration_ms)` → ingedrukt houden voor het context-menu (nodig als
   'tap to drop' uit staat en je via het long-press-menu wilt droppen).
 
+## Reactieve watcher (`scripts/watch.py`)
+
+Kijkt continu of een template op het scherm verschijnt en tikt er dan op. Dit is waar
+vision **betrouwbaar** in is: statische UI. Denk aan auto-continue van dialogen, een
+level-up-venster wegklikken, of een knop indrukken zodra die verschijnt.
+
+```powershell
+# blijf 'Click here to continue' wegklikken zodra het verschijnt
+python scripts/watch.py --watch templates/continue.png
+
+# meerdere dingen tegelijk bewaken
+python scripts/watch.py --watch continue.png --watch levelup.png --cooldown 3
+
+# wacht tot iets verschijnt, tik 1x, stop
+python scripts/watch.py --watch dialog.png --once
+```
+
+Opties: `--threshold` (match-drempel), `--interval` (scan-tempo), `--cooldown`
+(min. tijd voor dezelfde template opnieuw triggert, tegen spam-tikken),
+`--once` (stop na de eerste tik), `--max-triggers` (stop na N tikken). Ctrl+C stopt.
+
+> Vision is sterk voor statische UI (knoppen, iconen, dialogen), maar onbetrouwbaar voor
+> bewegende wereld-objecten (bomen die wuiven/despawnen, met de camera meeschuiven). Voor
+> dat laatste lezen client-based bots zoals GnomeBot/Microbot de game intern uit.
+
 ## Snelle API
 
 ```python
