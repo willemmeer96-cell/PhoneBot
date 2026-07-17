@@ -71,6 +71,10 @@ def describe(step: dict) -> str:
         return f"wait {step['min']}..{step['max']}s{label}"
     if t == "tap_template":
         return f"tap_template {Path(step['template']).name}{or_suffix(step)} @ {step.get('threshold', 0.85)}{label}"
+    if t == "tap_all_template":
+        where = " in zoekgebied" if step.get("region") else " (heel scherm)"
+        return (f"tap_all {Path(step['template']).name}{or_suffix(step)} "
+                f"@ {step.get('threshold', 0.85)}{where}{label}")
     if t == "wait_template":
         return (
             f"wait_template {Path(step['template']).name}{or_suffix(step)} @ {step.get('threshold', 0.85)} "
@@ -93,6 +97,7 @@ class Builder:
         self.drag_start: tuple[int, int] | None = None
         self.pending_if = False
         self.pending_or_step: dict | None = None
+        self.pending_region_step: dict | None = None
         self.active_if: int | None = None          # index in self.steps van de actieve if
         self.rows: list[tuple] = []                 # (container, index, depth, top_index)
 
@@ -136,11 +141,17 @@ class Builder:
         tk.Radiobutton(side, text="tap_template", variable=self.drag_mode, value="tap_template").pack(anchor="w")
         tk.Radiobutton(side, text="wait_template", variable=self.drag_mode, value="wait_template").pack(anchor="w")
         tk.Radiobutton(side, text="tap_region", variable=self.drag_mode, value="tap_region").pack(anchor="w")
+        tk.Radiobutton(side, text="tap_all_template (alles tikken)",
+                       variable=self.drag_mode, value="tap_all_template").pack(anchor="w")
 
         button_groups = [
             [
                 ("If-conditie", self.start_if),
                 ("OR-template", self.start_or_template),
+            ],
+            [
+                ("Zoekgebied", self.start_region),
+                ("Geen zoekgebied", self.clear_region),
             ],
             [
                 ("Wacht", self.add_wait),
@@ -215,9 +226,16 @@ class Builder:
                     "tap_region": "#35d16f",
                     "wait_template": "#ffd23b",
                     "if_template": "#c07bff",
+                    "tap_all_template": "#3bffd1",
                 }.get(step["type"], "#3bd1ff")
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline=colour, width=2)
                 self.canvas.create_text(x1 + 10, y1 + 8, text=tag, fill=colour)
+            if step.get("region"):
+                # zoekgebied van tap_all_template: groot gestippeld kader
+                rx1, ry1, rx2, ry2 = (v // SUB for v in step["region"])
+                self.canvas.create_rectangle(rx1, ry1, rx2, ry2, outline="#3bff8c",
+                                             width=2, dash=(6, 3))
+                self.canvas.create_text(rx1 + 26, ry1 + 10, text=f"{tag} zoekgebied", fill="#3bff8c")
             for alt_i, box in enumerate(step.get("boxes", []) or [], 1):
                 x1, y1, x2, y2 = (v // SUB for v in box)
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="#ff8c3b", width=2, dash=(3, 2))
@@ -306,8 +324,8 @@ class Builder:
         self.drag_start = None
         self.canvas.delete("rubber")
         if abs(e.x - sx) < 6 and abs(e.y - sy) < 6:
-            if self.pending_if or self.pending_or_step is not None:
-                messagebox.showinfo("Template", "Sleep een kader om het beeld (niet klikken).")
+            if self.pending_if or self.pending_or_step is not None or self.pending_region_step is not None:
+                messagebox.showinfo("Sleep vereist", "Sleep een kader (niet klikken).")
                 return
             self.add_step({"type": "tap", "x": e.x * SUB, "y": e.y * SUB})
         else:
@@ -318,6 +336,14 @@ class Builder:
         dx2, dy2 = max(x1, x2) * SUB, max(y1, y2) * SUB
         box = [dx1, dy1, dx2, dy2]
         mode = self.drag_mode.get()
+
+        # Zoekgebied zetten voor een geselecteerde tap_all_template-stap.
+        if self.pending_region_step is not None:
+            self.pending_region_step["region"] = box
+            self.pending_region_step = None
+            self.hint.config(text="Klik = tap  |  Sleep = template", fg="gray")
+            self.redraw()
+            return
 
         if mode == "tap_region" and not self.pending_if and self.pending_or_step is None:
             self.add_step({"type": "tap_region", "box": box, "mode": "random", "padding": 4})
@@ -355,6 +381,10 @@ class Builder:
         if step["type"] == "wait_template":
             step["timeout"] = 10.0
             step["tap"] = True
+        elif step["type"] == "tap_all_template":
+            step["delay"] = 0.25
+            step["repeat"] = True
+            step["max_taps"] = 40
         self.add_step(step)
 
     # ---------- knoppen ----------
@@ -365,12 +395,35 @@ class Builder:
 
     def start_or_template(self) -> None:
         step = self.selected_step()
-        if step is None or step.get("type") not in {"tap_template", "wait_template", "if_template"}:
+        if step is None or step.get("type") not in {"tap_template", "wait_template",
+                                                    "if_template", "tap_all_template"}:
             messagebox.showinfo("Geen template-stap", "Selecteer eerst een tap/wait/if template-stap.")
             return
         self.pending_if = False
+        self.pending_region_step = None
         self.pending_or_step = step
         self.hint.config(text="Sleep nu extra OR-template voor geselecteerde stap", fg="#ff8c3b")
+
+    def start_region(self) -> None:
+        """Beperk het zoekgebied van een tap_all_template-stap (bv. alleen je inventory)."""
+        step = self.selected_step()
+        if step is None or step.get("type") != "tap_all_template":
+            messagebox.showinfo("Geen tap_all-stap",
+                                "Selecteer eerst een tap_all_template-stap.")
+            return
+        self.pending_if = False
+        self.pending_or_step = None
+        self.pending_region_step = step
+        self.hint.config(text="Sleep nu het ZOEKGEBIED (bv. je inventory)", fg="#3bff8c")
+
+    def clear_region(self) -> None:
+        """Haal het zoekgebied weg (weer op het hele scherm zoeken)."""
+        step = self.selected_step()
+        if step is None or step.get("type") != "tap_all_template":
+            messagebox.showinfo("Geen tap_all-stap", "Selecteer eerst een tap_all_template-stap.")
+            return
+        step.pop("region", None)
+        self.redraw()
 
     def add_wait(self) -> None:
         lo = simpledialog.askfloat("Wacht", "Min. seconden:", initialvalue=3.0, minvalue=0.0)
