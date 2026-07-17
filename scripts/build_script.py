@@ -356,6 +356,19 @@ class Builder:
             return
         TEMPLATES.mkdir(exist_ok=True)
         name = f"step_{int(time.time() * 1000)}.png"
+        # Te kleine crops matchen overal -> onbetrouwbaar. Waarschuw voordat het misgaat.
+        ch, cw = crop.shape[:2]
+        if cw * ch < 2500:
+            ok = messagebox.askyesno(
+                "Template erg klein",
+                f"Deze crop is {cw}x{ch} px.\n\n"
+                "Kleine crops matchen bijna overal op het scherm, waardoor de bot op "
+                "willekeurige plekken tikt. Richtlijn: minstens ~60x60 met duidelijk "
+                "herkenbare vorm/tekst (niet alleen textuur zoals gras of bladeren).\n\n"
+                "Toch toevoegen?")
+            if not ok:
+                return
+
         cv2.imwrite(str(TEMPLATES / name), crop)
         tmpl = f"templates/{name}"
 

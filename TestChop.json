@@ -13,14 +13,28 @@
       ],
       "then": [
         {
-          "type": "tap_template",
-          "template": "templates/step_1784272008170.png",
+          "type": "tap_all_template",
+          "template": "templates/step_1784272903567.png",
           "threshold": 0.85,
           "box": [
-            2474,
-            1152,
-            2540,
-            1208
+            2256,
+            794,
+            2350,
+            856
+          ],
+          "delay": 0.25,
+          "repeat": true,
+          "max_taps": 40,
+          "templates": [
+            "templates/step_1784272915775.png"
+          ],
+          "boxes": [
+            [
+              2260,
+              706,
+              2348,
+              760
+            ]
           ]
         }
       ],
@@ -92,6 +106,17 @@
             688,
             1436,
             764
+          ],
+          "templates": [
+            "templates/step_1784272658975.png"
+          ],
+          "boxes": [
+            [
+              1654,
+              336,
+              1800,
+              456
+            ]
           ]
         },
         {
