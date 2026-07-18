@@ -1,0 +1,15 @@
+{
+  "_uitleg": "Vul tree_regions met je eigen willow-vakken (sleep tap_region in de builder en lees de box). inventory_region + log_template kloppen al voor een 2856x1280 landscape-scherm.",
+  "tree_regions": [
+    [1100, 330, 1320, 520],
+    [1650, 430, 1900, 620]
+  ],
+  "inventory_region": [2116, 580, 2596, 1219],
+  "log_template": "templates/willow_log.png",
+  "full_count": 28,
+  "threshold": 0.85,
+  "chop_wait": [4.0, 7.0],
+  "drop_delay": [0.15, 0.35],
+  "break_every": [40, 90],
+  "break_time": [8.0, 30.0]
+}

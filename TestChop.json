@@ -57,19 +57,7 @@
           "max": 5.0
         }
       ],
-      "else": [
-        {
-          "type": "tap_region",
-          "box": [
-            1302,
-            684,
-            1418,
-            756
-          ],
-          "mode": "random",
-          "padding": 4
-        }
-      ]
+      "else": []
     },
     {
       "type": "if_template",
@@ -99,23 +87,65 @@
       "else": [
         {
           "type": "tap_template",
-          "template": "templates/step_1784272092762.png",
-          "threshold": 0.85,
+          "template": "templates/step_1784273369133.png",
+          "threshold": 0.555,
           "box": [
-            1364,
-            688,
-            1436,
-            764
+            1744,
+            510,
+            1872,
+            618
           ],
           "templates": [
-            "templates/step_1784272658975.png"
+            "templates/step_1784273507805.png",
+            "templates/step_1784273516661.png",
+            "templates/step_1784273523021.png",
+            "templates/step_1784273528284.png",
+            "templates/step_1784273966275.png",
+            "templates/step_1784273977419.png",
+            "templates/step_1784273985875.png"
           ],
           "boxes": [
             [
-              1654,
-              336,
-              1800,
-              456
+              1716,
+              696,
+              1900,
+              830
+            ],
+            [
+              994,
+              398,
+              1140,
+              460
+            ],
+            [
+              948,
+              788,
+              1112,
+              950
+            ],
+            [
+              1566,
+              470,
+              1642,
+              516
+            ],
+            [
+              1148,
+              612,
+              1194,
+              658
+            ],
+            [
+              1786,
+              198,
+              1826,
+              286
+            ],
+            [
+              1864,
+              406,
+              1994,
+              494
             ]
           ]
         },
